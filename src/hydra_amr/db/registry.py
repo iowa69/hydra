@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from ..utils import HydraError
 
@@ -118,12 +119,12 @@ _register(DbSpec(
 # Protein + point-mutation reference (AMRFinderPlus data directory)
 # --------------------------------------------------------------------------
 _register(DbSpec(
-    name="amrfinderplus", kind="prot", title="AMRFinderPlus protein & point-mutation reference",
+    name="protein", kind="prot", title="NCBI protein & point-mutation reference (AMRFinderPlus data)",
     element_type=AMR, conda_env_hint=("amrfinder", "amrfinderplus", "ncbi-amrfinderplus", "linezolid-amr", "klebo"),
     conda_rel_path="share/amrfinderplus/data/latest",
     url="https://ftp.ncbi.nlm.nih.gov/pathogen/Antimicrobial_resistance/AMRFinderPlus/database/latest",
     citation="Feldgarden et al. 2021, Sci Rep 11:12728", licence="Public domain",
-    standard=True, aliases=("amrfinder", "afp", "point"),
+    standard=True, aliases=("amrfinderplus", "amrfinder", "afp", "point"),
     notes="Supplies translated-search AMR calls, --plus stress/virulence classes, "
           "and the organism-specific protein and DNA point-mutation catalogues.",
 ))
@@ -196,6 +197,18 @@ def resolve_names(names: list[str]) -> list[str]:
                 if candidate not in out:
                     out.append(candidate)
     return out
+
+
+def protein_dir(db_root: Path | str) -> Path:
+    """Where the protein reference is installed under ``db_root``.
+
+    Stores built before the database was renamed hold it under the old
+    directory name, and renaming the database must not orphan them.
+    """
+    root = Path(db_root)
+    legacy = root / "prot" / "amrfinderplus"
+    current = root / "prot" / "protein"
+    return legacy if legacy.exists() and not current.exists() else current
 
 
 def spec_for(name: str) -> DbSpec:

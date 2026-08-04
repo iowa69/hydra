@@ -17,8 +17,12 @@ DB_ENV_VAR = "HYDRA_DB"
 #: Cell values that ``--cell`` accepts for pivoted matrices.
 CELL_MODES = ("binary", "identity", "coverage", "count", "genes", "depth", "fraction", "symbol")
 
-#: Output formats ``--format`` accepts.
-OUTPUT_FORMATS = ("tsv", "csv", "json", "html", "xlsx", "abricate", "amrfinder")
+#: Output formats ``--format`` accepts. ``genes`` and ``elements`` are the two
+#: flat layouts kept for interoperability with existing downstream scripts.
+OUTPUT_FORMATS = ("tsv", "csv", "json", "html", "xlsx", "genes", "elements")
+
+#: Older spellings, still accepted so existing command lines keep working.
+FORMAT_ALIASES = {"abricate": "genes", "amrfinder": "elements"}
 
 #: Fields a pivot matrix can be keyed on, for both ``--rows`` and ``--columns``.
 MATRIX_FIELDS = ("sample", "gene", "class", "subclass", "database", "element_type", "product")

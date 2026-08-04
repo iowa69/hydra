@@ -19,6 +19,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from ..db.registry import protein_dir
 from ..utils import HydraError
 
 
@@ -114,7 +115,7 @@ def _require_columns(path: Path, header: list[str], needed: tuple[str, ...]) -> 
     if missing:
         raise HydraError(
             f"{path.name} is missing the column(s) {', '.join(missing)}; the AMRFinderPlus "
-            f"data format has changed. Re-run 'hydra db import --force amrfinderplus'.")
+            f"data format has changed. Re-run 'hydra db import --force protein'.")
     return idx
 
 
@@ -171,7 +172,7 @@ class MutationCatalog:
         return org == taxgroup or org.startswith(taxgroup + "_") or taxgroup.startswith(org + "_")
 
     def _load(self) -> None:
-        prot_dir = self.db_root / "prot" / "amrfinderplus"
+        prot_dir = protein_dir(self.db_root)
         header, rows = _read_tsv(prot_dir / "AMRProt-mutation.tsv")
         if header:
             idx = _require_columns(prot_dir / "AMRProt-mutation.tsv", header,

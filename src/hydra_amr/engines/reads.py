@@ -725,7 +725,7 @@ class ReadMapper:
             if call.p_value < 0.05:
                 note += f"; p={call.p_value:.2g}"
             hits.append(Hit(
-                sample=sample, database="amrfinderplus", gene=call.gene,
+                sample=sample, database="protein", gene=call.gene,
                 accession=call.reference.split("@")[0], product=call.name.replace("_", " "),
                 element_type="AMR", element_subtype="POINT",
                 drug_class=call.drug_class, subclass=call.subclass,

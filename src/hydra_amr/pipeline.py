@@ -204,7 +204,7 @@ class Pipeline:
                            organism_by_sample: dict[str, str | None], workdir: Path) -> None:
         nucl_dbs = [name for name in self.options.databases
                     if DATABASES.get(name) and DATABASES[name].kind == "nucl"]
-        want_protein = self.options.protein and "amrfinderplus" in self.options.databases
+        want_protein = self.options.protein and "protein" in self.options.databases
 
         if nucl_dbs:
             screener = NucleotideScreener(self.store, self.config)
@@ -214,8 +214,8 @@ class Pipeline:
                     results[sample].hits.extend(hits)
 
         if want_protein:
-            if not self.store.is_installed("amrfinderplus"):
-                LOG.warning("amrfinderplus database not installed; skipping translated search")
+            if not self.store.is_installed("protein"):
+                LOG.warning("protein database not installed; skipping translated search")
             else:
                 protein = ProteinScreener(self.store, self.config)
                 for sample, hits in protein.screen(batch, workdir, organism_by_sample,
@@ -477,7 +477,7 @@ class Pipeline:
     #: Databases ranked by how much they can say about a hit. AMRFinderPlus and
     #: NCBI carry curated class/subclass annotation, so their call wins when
     #: several databases describe the same locus.
-    DATABASE_RANK = {"amrfinderplus": 0, "ncbi": 1, "resfinder": 2, "card": 3,
+    DATABASE_RANK = {"protein": 0, "ncbi": 1, "resfinder": 2, "card": 3,
                      "argannot": 4, "megares": 5, "vfdb": 1, "vfdb_full": 2,
                      "ecoli_vf": 3, "plasmidfinder": 1, "ecoh": 1}
 

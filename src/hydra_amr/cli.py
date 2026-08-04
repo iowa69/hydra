@@ -11,10 +11,10 @@ from dataclasses import replace
 from pathlib import Path
 
 from . import __version__, presets
-from .config import (CELL_MODES, ELEMENT_TYPES, MATRIX_FIELDS, OUTPUT_FORMATS, Config,
-                     Thresholds, default_db_dir)
+from .config import (CELL_MODES, ELEMENT_TYPES, FORMAT_ALIASES, MATRIX_FIELDS,
+                     OUTPUT_FORMATS, Config, Thresholds, default_db_dir)
 from .db.manager import DatabaseStore, create_bundle, download_bundle, install_bundle
-from .db.registry import DATABASES, DB_GROUPS, resolve_names, spec_for
+from .db.registry import DATABASES, DB_GROUPS, protein_dir, resolve_names, spec_for
 from .engines.reads import ReadSet, pair_reads
 from .pipeline import Pipeline, RunOptions
 from .report.writer import write_outputs
@@ -37,8 +37,8 @@ examples:
   # single-database screen straight to stdout as a long table
   hydra screen -d card assemblies/*.fasta --stdout
 
-  # abricate's own column layout, written to a file
-  hydra screen -d card assemblies/*.fasta -o results/ -f abricate
+  # a flat one-row-per-gene table, written to a file
+  hydra screen -d card assemblies/*.fasta -o results/ -f genes
 
   # install the reference databases from local conda environments
   hydra db import
@@ -118,7 +118,7 @@ def _add_analysis(parser: argparse.ArgumentParser) -> None:
                "never infer the organism; only use --organism")
     group.add_argument("--plus", action="store_true", default=None,
                        help="also report stress-response and virulence elements "
-                            "from the AMRFinderPlus reference")
+                            "from the protein reference")
     _bool_pair(group, "mlst", "mlst", "run MLST (default)", "skip MLST")
     group.add_argument("--scheme", default=None, metavar="NAME",
                        help="force a PubMLST scheme instead of choosing automatically")
@@ -391,6 +391,7 @@ def _resolve_formats(args) -> list[str]:
             token = token.strip().lower()
             if not token:
                 continue
+            token = FORMAT_ALIASES.get(token, token)
             if token not in OUTPUT_FORMATS:
                 raise HydraError(f"unknown --format '{token}'; choose from "
                                  f"{', '.join(OUTPUT_FORMATS)}")
@@ -417,7 +418,7 @@ def _resolve_databases(args, store: DatabaseStore) -> list[str]:
 
 def _organism_choices(store: DatabaseStore) -> list[str]:
     organisms = set(store.mutation_organisms())
-    taxgroup = store.root / "prot" / "amrfinderplus" / "taxgroup.tsv"
+    taxgroup = protein_dir(store.root) / "taxgroup.tsv"
     if taxgroup.exists():
         with open(taxgroup) as handle:
             handle.readline()
@@ -438,7 +439,7 @@ def cmd_run(args) -> int:
     if args.list_organisms:
         choices = _organism_choices(store)
         if not choices:
-            print("no organisms available; install the amrfinderplus database first "
+            print("no organisms available; install the protein database first "
                   "(hydra db import)")
             return 1
         print("\n".join(choices))
@@ -561,12 +562,12 @@ def _print_recap(results, written) -> None:
 
 
 def cmd_screen(args) -> int:  # noqa: D401 - see below
-    """Gene screening only - the abricate-shaped entry point.
+    """Acquired-gene screening only.
 
     The analysis stages default to off here, but an explicit flag still wins:
     ``hydra screen --mlst`` is a reasonable thing to ask for.
     """
-    args.preset = args.preset or "abricate"
+    args.preset = args.preset or "genes"
     args._default_preset = False
     _apply_preset(args)
     if args.db is None:
@@ -577,7 +578,7 @@ def cmd_screen(args) -> int:  # noqa: D401 - see below
         if getattr(args, name) is None:
             setattr(args, name, default)
     if args.protein is None:
-        args.protein = "amrfinderplus" in resolve_names(args.db)
+        args.protein = "protein" in resolve_names(args.db)
     return cmd_run(args)
 
 
@@ -621,12 +622,12 @@ def cmd_db(args) -> int:
         only = resolve_names(args.names) if args.names else None
         search = [Path(p) for p in (args.source or [])]
         LOG.info("importing databases into %s", store.root)
-        # AMRFinderPlus first: its family table annotates every other database.
+        # The protein reference first: its family table annotates every other database.
         ordered = None
         if only is None:
-            ordered = ["amrfinderplus"] + [n for n in DATABASES if n != "amrfinderplus"]
-        elif "amrfinderplus" in only:
-            ordered = ["amrfinderplus"] + [n for n in only if n != "amrfinderplus"]
+            ordered = ["protein"] + [n for n in DATABASES if n != "protein"]
+        elif "protein" in only:
+            ordered = ["protein"] + [n for n in only if n != "protein"]
         else:
             ordered = only
         results = store.import_all(only=ordered, search_paths=search, force=args.force)
@@ -675,7 +676,7 @@ def cmd_db(args) -> int:
             print(f"no databases installed in {store.root}\n\n"
                   f"Install them with:  hydra db import")
             return 1
-        have_amrfinder = store.is_installed("amrfinderplus")
+        have_amrfinder = store.is_installed("protein")
         for name, entry in sorted(store.installed().items()):
             path = store.root / entry.get("path", "")
             if not path.exists():
@@ -689,7 +690,7 @@ def cmd_db(args) -> int:
                         print(f"WARN    {name}: metadata table is empty")
                         problems += 1
                         continue
-                    # A nucleotide database imported before AMRFinderPlus was
+                    # A nucleotide database imported before the protein reference was
                     # installed carries none of its curated annotation, and
                     # nothing re-annotates it later.
                     if (have_amrfinder and entry.get("kind") == "nucl"
@@ -702,7 +703,7 @@ def cmd_db(args) -> int:
                 print(f"BROKEN  {name}: {exc}")
                 problems += 1
         if stale:
-            print(f"\nSTALE   {', '.join(stale)}: imported before the AMRFinderPlus reference, "
+            print(f"\nSTALE   {', '.join(stale)}: imported before the protein reference, "
                   f"so they carry no curated drug-class or gene-family annotation.\n"
                   f"        Refresh them with:  hydra db import --force {' '.join(stale)}")
         if problems:
@@ -734,7 +735,7 @@ def _download(store: DatabaseStore, args) -> int:
         print(f"installed {len(installed)} database(s): {', '.join(sorted(installed))}")
         return _print_databases(store)
 
-    names = resolve_names(args.names) if args.names else ["ncbi", "card", "vfdb", "amrfinderplus"]
+    names = resolve_names(args.names) if args.names else ["ncbi", "card", "vfdb", "protein"]
     print("Hydra does not redistribute third-party sequence data, so there are three\n"
           "ways to get the databases.\n")
     print("1. From tools already installed on this machine (quickest):")
@@ -867,7 +868,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.set_defaults(func=cmd_run, _default_preset=True)
 
     screen_parser = subparsers.add_parser(
-        "screen", help="acquired-gene screening only (abricate-style)",
+        "screen", help="acquired-gene screening only, as a flat gene table",
         description="Screen assemblies against nucleotide gene databases. "
                     "No typing, no point mutations.",
         formatter_class=argparse.RawDescriptionHelpFormatter)

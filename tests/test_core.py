@@ -22,8 +22,8 @@ from hydra_amr.records import Hit, SampleResult, SpeciesCall, TypingResult
 from hydra_amr.typing.lineage import _marker_group, resistance_score, virulence_score
 from hydra_amr.typing.mlst import MlstTyper, SchemeProfiles
 from hydra_amr.report.html import _format_cell
-from hydra_amr.report.tables import (ABRICATE_COLUMNS, _coverage_glyph, abricate_table,
-                                     class_summary, long_table, matrix, summary_table)
+from hydra_amr.report.tables import (GENE_COLUMNS, _coverage_glyph, class_summary,
+                                     gene_table, long_table, matrix, summary_table)
 from hydra_amr.report.writer import write_outputs
 from hydra_amr.utils import HydraError, natural_key, revcomp, sample_name_from_path, translate
 
@@ -778,29 +778,29 @@ def test_coverage_glyph_marks_covered_regions():
     assert _coverage_glyph(Hit(sample="s", database="d", gene="g", coverage="")) == ""
 
 
-def test_abricate_table_columns_match_upstream():
+def test_gene_table_has_a_stable_column_layout():
     result = _result("s1", ["blaKPC-2"])
     result.hits[0].coverage = "1-861/861"
-    frame = abricate_table([result])
-    assert list(frame.columns) == list(ABRICATE_COLUMNS)
-    # abricate reports the full span in COVERAGE and a glyph in COVERAGE_MAP.
+    frame = gene_table([result])
+    assert list(frame.columns) == list(GENE_COLUMNS)
+    # COVERAGE holds the full span; COVERAGE_MAP is the alignment glyph.
     assert frame.iloc[0]["COVERAGE"] == "1-861/861"
     assert set(frame.iloc[0]["COVERAGE_MAP"]) <= {"=", "."}
 
 
-def test_writer_always_writes_compatibility_layouts_as_tsv(tmp_path):
-    """--format abricate must produce a file, even alongside html/json."""
+def test_writer_always_writes_flat_layouts_as_tsv(tmp_path):
+    """--format genes must produce a file, even alongside html/json."""
     results = [_result("s1", ["blaKPC-2"])]
-    written = write_outputs(results, outdir=tmp_path, formats=["abricate", "json"])
+    written = write_outputs(results, outdir=tmp_path, formats=["genes", "json"])
     names = {p.name for p in written}
-    assert "hydra.abricate.tsv" in names
+    assert "hydra.genes.tsv" in names
     assert "hydra.json" in names
-    content = (tmp_path / "hydra.abricate.tsv").read_text()
+    content = (tmp_path / "hydra.genes.tsv").read_text()
     assert "\t" in content.splitlines()[0]
 
 
 def test_writer_honours_every_requested_table_format(tmp_path):
     results = [_result("s1", ["blaKPC-2"])]
-    written = write_outputs(results, outdir=tmp_path, formats=["tsv", "csv", "amrfinder"])
+    written = write_outputs(results, outdir=tmp_path, formats=["tsv", "csv", "elements"])
     names = {p.name for p in written}
-    assert {"hydra.tsv", "hydra.csv", "hydra.amrfinder.tsv"} <= names
+    assert {"hydra.tsv", "hydra.csv", "hydra.elements.tsv"} <= names

@@ -12,7 +12,7 @@ import pandas as pd
 from ..records import SampleResult
 from ..utils import LOG, HydraError
 from . import html as html_report
-from .tables import (abricate_table, amrfinder_table, class_summary, heteroresistance_table,
+from .tables import (class_summary, element_table, gene_table, heteroresistance_table,
                      long_table, matrix, mlst_table, summary_table, typing_table)
 
 #: Suffixes used for each artefact, appended to the output prefix.
@@ -24,8 +24,8 @@ ARTEFACTS = {
     "mlst": ".mlst",
     "typing": ".typing",
     "hetero": ".heteroresistance",
-    "abricate": ".abricate",
-    "amrfinder": ".amrfinder",
+    "genes": ".genes",
+    "elements": ".elements",
 }
 
 
@@ -73,8 +73,8 @@ def write_outputs(results: Sequence[SampleResult], *, outdir: Path | None, prefi
     base = outdir / prefix
 
     table_formats = [f for f in formats if f in ("tsv", "csv", "xlsx")]
-    compat_only = {"abricate", "amrfinder"} & set(formats)
-    if not table_formats and not (set(formats) & {"json", "html"}) and not compat_only:
+    flat_only = {"genes", "elements"} & set(formats)
+    if not table_formats and not (set(formats) & {"json", "html"}) and not flat_only:
         table_formats = ["tsv"]
 
     frames = {
@@ -98,9 +98,9 @@ def write_outputs(results: Sequence[SampleResult], *, outdir: Path | None, prefi
             _write_frame(frame, path, fmt)
             written.append(path)
 
-    # The compatibility layouts are defined as tab-separated, whatever the other
-    # table formats are, and are written whenever they are requested.
-    for name, builder in (("abricate", abricate_table), ("amrfinder", amrfinder_table)):
+    # The flat layouts are tab-separated whatever the other table formats are,
+    # and are written whenever they are requested.
+    for name, builder in (("genes", gene_table), ("elements", element_table)):
         if name in formats:
             path = Path(f"{base}{ARTEFACTS[name]}.tsv")
             _write_frame(builder(results), path, "tsv")

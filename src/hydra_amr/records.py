@@ -135,7 +135,7 @@ class SpeciesCall:
 
 @dataclass
 class TypingResult:
-    """One lineage/sublineage typing call (Kleborate-style)."""
+    """One lineage or sublineage typing call."""
 
     scheme: str
     call: str = "-"

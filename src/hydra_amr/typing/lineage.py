@@ -4,11 +4,11 @@ The allele-based schemes (yersiniabactin, colibactin, aerobactin, salmochelin,
 *rmpA*) come from Kleborate and are typed exactly as MLST is: best allele per
 locus, then a profile lookup that also yields the lineage label.
 
-The scores are Hydra's generalisation of Kleborate's. The virulence score keeps
-Kleborate's published 0-5 definition for the *Klebsiella pneumoniae* species
-complex, and applies analogous species-specific rules elsewhere. The resistance
-score is computed from AMRFinderPlus drug-class annotation rather than a
-Klebsiella-specific gene list, so it is meaningful for any Gram-negative.
+The virulence score keeps the published 0-5 definition for the *Klebsiella
+pneumoniae* species complex, and applies analogous species-specific rules
+elsewhere. The resistance score is computed from the curated drug-class
+annotation rather than a Klebsiella-specific gene list, so it is meaningful for
+any Gram-negative.
 """
 
 from __future__ import annotations
@@ -385,7 +385,7 @@ def _in_family(name: str, families: tuple[str, ...]) -> bool:
 
 
 def resistance_score(hits: list[Hit]) -> tuple[int, dict[str, bool]]:
-    """Kleborate's 0-3 resistance score, generalised via drug-class annotation.
+    """A 0-3 resistance score, generalised via drug-class annotation.
 
     0 = neither ESBL nor carbapenemase; 1 = ESBL only; 2 = carbapenemase;
     3 = carbapenemase plus colistin resistance.

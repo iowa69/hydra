@@ -47,7 +47,7 @@ class ProteinScreener:
         organism, so a mixed-species batch is still typed correctly from one
         translated search.
         """
-        handle = self.store.handle("amrfinderplus")
+        handle = self.store.handle("protein")
         check_db_exists(handle.fasta, "prot")
         threads = threads or self.config.threads
         thresholds = self.config.thresholds
@@ -57,7 +57,7 @@ class ProteinScreener:
                  batch.n_contigs, handle.n_sequences,
                  f"; organisms: {', '.join(organisms)}" if organisms else "")
 
-        out_tab = workdir / "amrfinderplus.blastx.tsv"
+        out_tab = workdir / "protein.blastx.tsv"
         hsps = blast(
             "blastx", batch.path, handle.fasta, out_tab,
             # A contig carrying several resistance genes matches hundreds of
@@ -131,7 +131,7 @@ class ProteinScreener:
                     continue
                 method = "EXACTX" if exact else ("PARTIALX" if partial else "BLASTX")
                 hits.append(Hit(
-                    sample=sample, database="amrfinderplus",
+                    sample=sample, database="protein",
                     gene=meta.get("gene", merged_hit.sseqid),
                     accession=meta.get("accession", ""),
                     product=meta.get("product", ""),
@@ -169,7 +169,7 @@ class ProteinScreener:
             if merged_hit.identity_pct >= rule["cutoff"]:
                 continue
             hits.append(Hit(
-                sample=sample, database="amrfinderplus", gene=rule["gene"], accession=accession,
+                sample=sample, database="protein", gene=rule["gene"], accession=accession,
                 product=rule["name"].replace("_", " "), element_type="AMR",
                 element_subtype="POINT", drug_class=rule["class"], subclass=rule["subclass"],
                 sequence=piece.contig, start=merged_hit.query_start + piece.offset,
@@ -229,7 +229,7 @@ class ProteinScreener:
             calls = self._match_entries(group, entries, reference_length, nucleotide=False)
             for entry, obs, hsp in calls:
                 out.setdefault(sample, []).append(Hit(
-                    sample=sample, database="amrfinderplus", gene=entry.gene,
+                    sample=sample, database="protein", gene=entry.gene,
                     accession=accession, product=entry.name.replace("_", " "),
                     element_type="AMR", element_subtype="POINT",
                     drug_class=entry.drug_class, subclass=entry.subclass,
@@ -331,7 +331,7 @@ class ProteinScreener:
             calls = self._match_entries(group, entries, reference_length, nucleotide=True)
             for entry, obs, hsp in calls:
                 out.setdefault(sample, []).append(Hit(
-                    sample=sample, database="amrfinderplus", gene=entry.gene,
+                    sample=sample, database="protein", gene=entry.gene,
                     accession=sseqid.split("@")[0], product=entry.name.replace("_", " "),
                     element_type="AMR", element_subtype="POINT",
                     drug_class=entry.drug_class, subclass=entry.subclass,

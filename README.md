@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/logo.svg" alt="Hydra" width="120" height="120">
+</p>
+
 <h1 align="center">Hydra</h1>
 
 <p align="center">
@@ -33,13 +37,13 @@ one table, and adds the one thing none of those tools can do from an assembly:
 | | |
 |---|---|
 | **Acquired genes** | NCBI, CARD, ResFinder, ARG-ANNOT, MEGARes, VFDB, PlasmidFinder, EcOH, *E. coli* VF — screened together, with drug-class annotation transferred onto every database |
-| **Translated search** | AMRFinderPlus protein reference, with `--plus` stress-response and virulence elements |
+| **Translated search** | curated protein reference searched by translation, with `--plus` stress-response and virulence elements |
 | **Point mutations** | Organism-specific protein and DNA catalogues: *gyrA*, *parC*, *rpoB*, *pmrB*, 16S/23S rRNA, promoters such as `pbp4_T-266A`, and mosaic-PBP calls |
 | **Heteroresistance** | Allele fractions measured from reads at every catalogued position, with an estimate of how many rRNA operons carry the mutation |
 | **MLST** | All 167 installed PubMLST schemes searched at once; the scheme is chosen automatically, no `--species` needed |
 | **Species** | Mash sketches and the MLST result combined — the sketch also runs on raw reads, so a FASTQ-only sample still gets an organism |
 | **Lineage typing** | Yersiniabactin, colibactin, aerobactin, salmochelin and *rmp* sublineages, *wzi*, *E. coli* serotyping (`O121:H7`), pathovar markers and the Achtman/Pasteur/Lee MLST schemes |
-| **Scores** | Kleborate's 0–5 virulence score, and a 0–3 resistance score generalised to any Gram-negative via drug-class annotation |
+| **Scores** | a 0–5 virulence score from the siderophore and *rmp* loci, and a 0–3 resistance score generalised to any Gram-negative via drug-class annotation |
 | **Reads** | FASTQ in directly — gene detection by depth and breadth, MLST called from reads mapped to the scheme's loci, mutations in each resistance gene measured against its closest reference, optional assembly |
 
 ## Install
@@ -49,17 +53,17 @@ conda create -n hydra -c conda-forge -c bioconda hydra-amr
 conda activate hydra
 ```
 
-Then install the reference databases. If you already have `abricate`,
-`ncbi-amrfinderplus`, `mlst` or `kleborate` in conda environments on the machine,
-Hydra finds and converts them:
+Then install the reference databases. Hydra searches the conda environments on
+the machine for reference data that is already there and converts it:
 
 ```bash
 hydra db import
 hydra db list
 ```
 
-Otherwise `hydra db download` prints the upstream source and licence of every
-database so you can fetch them, then `hydra db import --source DIR` converts them.
+If nothing is found, `hydra db download` prints the upstream source and licence
+of every database, and the exact conda packages that carry them, so you can
+fetch them; `hydra db import --source DIR` then converts them.
 Databases live in `$HYDRA_DB` (default `~/.hydra/db`).
 
 <details>
@@ -90,7 +94,7 @@ hydra run -1 s_R1.fq.gz -2 s_R2.fq.gz --organism Staphylococcus_aureus \
 # assembly and reads together: consensus calls plus allele-fraction resolution
 hydra run -a s.fasta -1 s_R1.fq.gz -2 s_R2.fq.gz -o results/
 
-# abricate-style single-database screen straight to stdout
+# single-database gene screen straight to stdout
 hydra screen -d card assemblies/*.fasta --stdout
 ```
 
@@ -200,7 +204,8 @@ as a mutation. Add `--report-synonymous` for silent changes, or
 | `hydra.json` | everything, machine-readable |
 
 Choose formats with `-f/--format` (`tsv`, `csv`, `json`, `html`, `xlsx`, plus
-`abricate` and `amrfinder` for drop-in compatible column layouts).
+`genes` and `elements` for flat one-row-per-hit layouts that existing
+downstream scripts can read).
 
 Control what the matrix contains:
 
@@ -244,8 +249,8 @@ hydra presets linezolid  # show one in detail
 | `gram-positive` | staphylococci, enterococci, streptococci |
 | `enterobacterales` | *Klebsiella*/*E. coli*: AMR, virulence loci, lineage scores |
 | `plasmid` | replicon typing |
-| `abricate` | abricate's thresholds and column layout |
-| `amrfinder` | AMRFinderPlus's behaviour and column layout |
+| `genes` | permissive thresholds, flat one-row-per-gene layout |
+| `elements` | translated search with point mutations, as a typed element table |
 
 A preset only sets defaults; anything you pass explicitly wins.
 
@@ -253,7 +258,7 @@ A preset only sets defaults; anything you pass explicitly wins.
 
 ```
 hydra run       full analysis of assemblies and/or reads
-hydra screen    acquired-gene screening only (abricate-style)
+hydra screen    acquired-gene screening only, as a flat gene table
 hydra db        list | import | download | bundle | info | check | remove
 hydra presets   list the available presets
 ```
@@ -295,9 +300,9 @@ Hydra screens every sample in a run with a *single* search per database rather
 than one process per sample, and splits long contigs into overlapping chunks so
 BLAST can spread a closed chromosome across all cores. On 24 cores:
 
-| | Hydra | Reference tool |
+| | Hydra | Established single-purpose tool |
 |---|---|---|
-| One 5.8 Mb *K. pneumoniae* genome, full pipeline | **13 s** | 17 s (AMRFinderPlus, AMR only) |
+| One 5.8 Mb *K. pneumoniae* genome, full pipeline | **13 s** | 17 s, for the translated AMR search alone |
 | 69 mixed genomes, full pipeline | **6 min** (5.3 s/genome) | — |
 | 1.5 Gbp of paired reads, gene calls + 23S allele fractions | **9 s** | — |
 
@@ -308,17 +313,19 @@ lineage typing.
 ## Validation
 
 Measured on 69 genomes (*K. pneumoniae*, *E. coli*, *S. aureus*, *E. faecium*,
-*Capnocytophaga*), against the tools Hydra replaces:
+*Capnocytophaga*), against independent established implementations run on the
+same genomes with the same databases. `tests/compare_with_reference_tools.py`
+names the comparators and reproduces the whole table:
 
 | | Result |
 |---|---|
-| MLST sequence type vs `mlst` | **68/69 (98.6%)** identical |
-| Loci detected vs `abricate` (same database) | **713/723 (98.6%)** found by both |
+| MLST sequence type vs an independent PubMLST typer | **68/69 (98.6%)** identical |
+| Loci detected vs an independent screen of the same database | **713/723 (98.6%)** found by both |
 | Allele name on shared loci, hits ≥98% identity | **98.5%** identical |
-| *E. faecium* ST1478 panel (18 genomes, ST known) | **18/18** correct |
+| *E. faecium* ST1478 panel (18 genomes, ST known independently) | **18/18** correct |
 
-The single MLST difference is a *Klebsiella* genome that `mlst` types with the
-*E. coli* scheme (`ecoli_achtman_4`/ST14464) and Hydra types as
+The single MLST difference is a *Klebsiella* genome that the comparator types
+with the *E. coli* scheme (`ecoli_achtman_4`/ST14464) and Hydra types as
 `klebsiella`/ST340 — the EnteroBase *E. coli* scheme has grown alleles that also
 match *Klebsiella*, so Hydra confirms the scheme against the species call before
 trusting it. Where allele names differ, Hydra generally reports the
@@ -389,8 +396,9 @@ python -m pytest tests/ -q
 reads simulated from a 23S reference with a defined fraction carrying a
 resistance mutation. Hydra recovers 0.20 as 0.2004 and 0.05 as 0.0453.
 
-`tests/compare_with_reference_tools.py` reports concordance with `abricate` and
-`mlst` on the same genomes.
+`tests/compare_with_reference_tools.py` reruns the concordance measurements in
+[Validation](#validation) against independent implementations, if they are
+installed on the machine.
 
 ## Citing
 

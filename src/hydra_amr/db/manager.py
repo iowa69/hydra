@@ -25,7 +25,8 @@ from pathlib import Path
 
 from ..seqio import read_fasta, write_fasta
 from ..utils import LOG, HydraError, human_bytes, require, run
-from .registry import AMR, DATABASES, PLASMID, SEROTYPE, STRESS, VIRULENCE, DbSpec, spec_for
+from .registry import (AMR, DATABASES, PLASMID, SEROTYPE, STRESS, VIRULENCE, DbSpec,
+                       protein_dir, spec_for)
 
 MANIFEST_NAME = "manifest.json"
 
@@ -242,6 +243,10 @@ def read_fam_table(path: Path) -> dict[str, dict]:
     return out
 
 
+#: Databases renamed after release, mapped old name -> current name.
+LEGACY_DB_NAMES = {"amrfinderplus": "protein"}
+
+
 class DatabaseStore:
     """Owns ``$HYDRA_DB`` — installation, manifest bookkeeping and lookup."""
 
@@ -278,6 +283,12 @@ class DatabaseStore:
             # A manifest written by a future version may lack the key entirely.
             if not isinstance(self._manifest.get("databases"), dict):
                 self._manifest["databases"] = {}
+            # Stores built before the protein reference was renamed. The recorded
+            # path is left alone, so the files stay where they were installed.
+            for old, new in LEGACY_DB_NAMES.items():
+                databases = self._manifest["databases"]
+                if old in databases and new not in databases:
+                    databases[new] = databases.pop(old)
         return self._manifest
 
     def _save_manifest(self) -> None:
@@ -460,7 +471,7 @@ class DatabaseStore:
         if cached is not None:
             return cached
         lookup: dict[str, tuple[str, str, str, str, str]] = {}
-        prot_dir = self.root / "prot" / "amrfinderplus"
+        prot_dir = protein_dir(self.root)
         fam = read_fam_table(prot_dir / "fam.tsv")
         # Read the normalised metadata table, not AMRProt.fa: the installed FASTA
         # carries short synthetic ids, so its headers no longer hold annotation.

@@ -10,13 +10,13 @@ from ..config import CELL_MODES
 from ..records import HIT_COLUMNS, SampleResult
 from ..utils import HydraError
 
-#: Columns of the abricate-compatible output, in abricate's own order.
-ABRICATE_COLUMNS = ("#FILE", "SEQUENCE", "START", "END", "STRAND", "GENE", "COVERAGE",
+#: Columns of the flat gene layout, one row per detected gene.
+GENE_COLUMNS = ("#FILE", "SEQUENCE", "START", "END", "STRAND", "GENE", "COVERAGE",
                     "COVERAGE_MAP", "GAPS", "%COVERAGE", "%IDENTITY", "DATABASE",
                     "ACCESSION", "PRODUCT", "RESISTANCE")
 
-#: Columns of the AMRFinderPlus-compatible output.
-AMRFINDER_COLUMNS = ("Name", "Contig id", "Start", "Stop", "Strand", "Element symbol",
+#: Columns of the element layout, which names the type of every element.
+ELEMENT_COLUMNS = ("Name", "Contig id", "Start", "Stop", "Strand", "Element symbol",
                      "Element name", "Scope", "Element type", "Element subtype",
                      "Class", "Subclass", "Method", "Target length",
                      "Reference sequence length", "% Coverage of reference",
@@ -177,7 +177,7 @@ def matrix(results: Sequence[SampleResult], *, rows: str = "sample", columns: st
 
 
 def _coverage_glyph(hit, width: int = 15) -> str:
-    """abricate's COVERAGE_MAP: ``=`` where the reference is covered, ``.`` where not."""
+    """COVERAGE_MAP: ``=`` where the reference is covered, ``.`` where it is not."""
     spans, _, total = hit.coverage.rpartition("/")
     try:
         length = int(total)
@@ -199,8 +199,8 @@ def _coverage_glyph(hit, width: int = 15) -> str:
     return "".join("=" if flag else "." for flag in covered)
 
 
-def abricate_table(results: Sequence[SampleResult]) -> pd.DataFrame:
-    """Drop-in replacement for abricate's tabular output."""
+def gene_table(results: Sequence[SampleResult]) -> pd.DataFrame:
+    """Flat gene layout: one row per detected gene, with span and identity."""
     rows = []
     for result in results:
         source = result.inputs[0] if result.inputs else result.sample
@@ -217,11 +217,11 @@ def abricate_table(results: Sequence[SampleResult]) -> pd.DataFrame:
                 "DATABASE": hit.database, "ACCESSION": hit.accession, "PRODUCT": hit.product,
                 "RESISTANCE": resistance,
             })
-    return pd.DataFrame(rows, columns=list(ABRICATE_COLUMNS))
+    return pd.DataFrame(rows, columns=list(GENE_COLUMNS))
 
 
-def amrfinder_table(results: Sequence[SampleResult]) -> pd.DataFrame:
-    """Output shaped like AMRFinderPlus's report."""
+def element_table(results: Sequence[SampleResult]) -> pd.DataFrame:
+    """Element layout: every row states the type and subtype of what was found."""
     rows = []
     for result in results:
         for hit in result.hits:
@@ -240,7 +240,7 @@ def amrfinder_table(results: Sequence[SampleResult]) -> pd.DataFrame:
                 "% Identity to reference": round(hit.identity_pct, 2),
                 "Accession of closest sequence": hit.accession,
             })
-    return pd.DataFrame(rows, columns=list(AMRFINDER_COLUMNS))
+    return pd.DataFrame(rows, columns=list(ELEMENT_COLUMNS))
 
 
 #: Methods whose hits belong in the heteroresistance view: a catalogued site
