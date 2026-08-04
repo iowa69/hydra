@@ -66,7 +66,7 @@ Databases live in `$HYDRA_DB` (default `~/.hydra/db`).
 <summary>Install from source</summary>
 
 ```bash
-git clone https://github.com/hydra-amr/hydra && cd hydra
+git clone https://github.com/iowa69/hydra && cd hydra
 conda create -n hydra -c conda-forge -c bioconda \
     python=3.11 blast minimap2 samtools mash pysam pandas numpy scipy
 conda activate hydra

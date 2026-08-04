@@ -33,8 +33,8 @@ all = ["pysam>=0.19", "scipy>=1.7", "openpyxl>=3.0"]
 hydra = "hydra.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/hydra-amr/hydra"
-Documentation = "https://github.com/hydra-amr/hydra#readme"
+Homepage = "https://github.com/iowa69/hydra"
+Documentation = "https://github.com/iowa69/hydra#readme"
 
 [tool.setuptools.packages.find]
 where = ["src"]

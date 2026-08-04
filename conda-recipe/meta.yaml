@@ -14,6 +14,8 @@ build:
   script: {{ PYTHON }} -m pip install . --no-deps --no-build-isolation -vv
   entry_points:
     - hydra = hydra.cli:main
+  run_exports:
+    - {{ pin_subpackage(name, max_pin="x") }}
 
 requirements:
   host:
@@ -50,7 +52,7 @@ test:
     - samtools --version
 
 about:
-  home: https://github.com/hydra-amr/hydra
+  home: https://github.com/iowa69/hydra
   license: MIT
   license_family: MIT
   license_file: ../LICENSE
@@ -70,9 +72,9 @@ about:
     Results come out as TSV, CSV, JSON or a self-contained HTML report with
     clustered heatmaps, pivoted on samples or genes, showing presence/absence,
     percent identity, coverage, read depth or allele fraction.
-  doc_url: https://github.com/hydra-amr/hydra#readme
-  dev_url: https://github.com/hydra-amr/hydra
+  doc_url: https://github.com/iowa69/hydra#readme
+  dev_url: https://github.com/iowa69/hydra
 
 extra:
   recipe-maintainers:
-    - hydra-amr
+    - iowa69
