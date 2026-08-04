@@ -1,0 +1,78 @@
+{% set name = "hydra-amr" %}
+{% set version = "1.0.0" %}
+
+package:
+  name: {{ name|lower }}
+  version: {{ version }}
+
+source:
+  path: ..
+
+build:
+  noarch: python
+  number: 0
+  script: {{ PYTHON }} -m pip install . --no-deps --no-build-isolation -vv
+  entry_points:
+    - hydra = hydra.cli:main
+
+requirements:
+  host:
+    - python >=3.9
+    - pip
+    - setuptools >=68
+  run:
+    - python >=3.9
+    - pandas >=1.3
+    - numpy >=1.20
+    - scipy >=1.7
+    - pysam >=0.19
+    - openpyxl >=3.0
+    - blast >=2.12
+    - minimap2 >=2.24
+    - samtools >=1.15
+    - mash >=2.3
+
+test:
+  imports:
+    - hydra
+    - hydra.engines
+    - hydra.typing
+    - hydra.report
+  commands:
+    - hydra --version
+    - hydra --help
+    - hydra run --help
+    - hydra screen --help
+    - hydra db --help
+    - hydra presets
+    - blastn -version
+    - minimap2 --version
+    - samtools --version
+
+about:
+  home: https://github.com/hydra-amr/hydra
+  license: MIT
+  license_family: MIT
+  license_file: ../LICENSE
+  summary: Unified AMR, virulence, point-mutation, heteroresistance, MLST and lineage typing
+  description: |
+    Hydra screens bacterial assemblies and raw reads for acquired resistance and
+    virulence genes, organism-specific resistance point mutations, multi-locus
+    sequence types and lineage typing schemes, in one pass over one set of
+    databases.
+
+    It reports heteroresistance directly from reads: allele fractions are
+    measured at every catalogued mutation position, so a resistance mutation
+    carried by only some copies of a multi-copy locus - the usual situation for
+    the 23S rRNA mutations behind linezolid resistance - is detected even though
+    the assembly consensus is wild type.
+
+    Results come out as TSV, CSV, JSON or a self-contained HTML report with
+    clustered heatmaps, pivoted on samples or genes, showing presence/absence,
+    percent identity, coverage, read depth or allele fraction.
+  doc_url: https://github.com/hydra-amr/hydra#readme
+  dev_url: https://github.com/hydra-amr/hydra
+
+extra:
+  recipe-maintainers:
+    - hydra-amr

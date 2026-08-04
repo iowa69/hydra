@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: unit tests (python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.9", "3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install .[all] pytest pyflakes
+      - name: Lint
+        run: python -m pyflakes src/hydra tests
+      - name: Test
+        run: python -m pytest tests/test_core.py -q
+      - name: CLI smoke test
+        run: |
+          hydra --version
+          hydra --help
+          hydra run --help
+          hydra screen --help
+          hydra db --help
+          hydra presets
+
+  integration:
+    name: end-to-end with BLAST
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -el {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-version: latest
+          channels: conda-forge,bioconda
+          channel-priority: strict
+          activate-environment: hydra
+      - name: Install dependencies
+        run: |
+          conda install -y python=3.11 blast minimap2 samtools mash pysam pandas numpy scipy openpyxl pytest
+          pip install .
+      - name: Build a toy database and screen an assembly
+        run: |
+          mkdir -p toydb/src
+          printf '>toy~~~blaTOY-1~~~NG_000001.1~~~toy carbapenemase\nATGAGTATTCAACATTTCCGTGTCGCCCTTATTCCCTTTTTTGCGGCATTTTGCCTTCCTGTTTTTGCTCACCCAGAAACGCTGGTGAAAGTAAAAGATGCTGAAGATCAGTTGGGTGCACGAGTGGGTTACATCGAACTGGATCTCAACAGCGGTAAGATCCTTGAGAGTTTTCGCCCCGAAGAACGTTTTCCAATGATGAGCACTTTTAAAGTTCTGCTATGTGGCGCGGTATTATCCCGTGTTGACGCCGGGCAAGAGCAACTCGGTCGCCGCATACACTATTCTCAGAATGACTTGGTTGAGTACTCACCAGTCACAGAAAAGCATCTTACGGATGGCATGACAGTAAGAGAATTATGCAGTGCTGCCATAACCATGAGTGATAACACTGCGGCCAACTTACTTCTGACAACGATCGGAGGACCGAAGGAGCTAACCGCTTTTTTGCACAACATGGGGGATCATGTAACTCGCCTTGATCGTTGGGAACCGGAGCTGAATGAAGCCATACCAAACGACGAGCGTGACACCACGATGCCTGTAGCAATGGCAACAACGTTGCGCAAACTATTAACTGGCGAACTACTTACTCTAGCTTCCCGGCAACAATTAATAGACTGGATGGAGGCGGATAAAGTTGCAGGACCACTTCTGCGCTCGGCCCTTCCGGCTGGCTGGTTTATTGCTGATAAATCTGGAGCCGGTGAGCGTGGGTCTCGCGGTATCATTGCAGCACTGGGGCCAGATGGTAAGCCCTCCCGTATCGTAGTTATCTACACGACGGGGAGTCAGGCAACTATGGATGAACGAAATAGACAGATCGCTGAGATAGGTGCCTCACTGATTAAGCATTGGTAA\n' > toydb/src/sequences
+          HYDRA_DB=$PWD/toydb hydra db import --source toydb/src ncbi || true
+          printf '>contig1\n' > toy.fasta
+          tail -n +2 toydb/src/sequences >> toy.fasta
+          HYDRA_DB=$PWD/toydb hydra screen -a toy.fasta -d ncbi --stdout || true
+      - name: Errors are clear without databases
+        run: |
+          mkdir -p emptydb
+          hydra db list --db-dir emptydb || true
+          hydra run -a toy.fasta --db-dir emptydb -o out 2>&1 | tail -3

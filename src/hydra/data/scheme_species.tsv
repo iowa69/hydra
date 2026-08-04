@@ -1,0 +1,174 @@
+# Hydra curated PubMLST scheme -> organism mapping.
+# Supersedes the scheme_species_map.tab shipped with some MLST installations,
+# which is missing or stale for several schemes (klebsiella, ecoli_achtman_4,
+# senterica_achtman_2, listeria_2, ...).
+# amrfinder_organism must be one of the AMRFinderPlus taxgroups; leave blank when
+# the scheme cannot resolve to a single supported taxgroup.
+#scheme	genus	species	amrfinder_organism
+aactinomycetemcomitans	Aggregatibacter	actinomycetemcomitans
+abaumannii	Acinetobacter	baumannii	Acinetobacter_baumannii
+abaumannii_2	Acinetobacter	baumannii	Acinetobacter_baumannii
+achromobacter	Achromobacter
+actinobacillus	Actinobacillus
+aeromonas	Aeromonas
+aparagallinarum	Avibacterium	paragallinarum
+aphagocytophilum	Anaplasma	phagocytophilum
+arcobacter	Arcobacter
+bbacilliformis	Bartonella	bacilliformis
+bcc	Burkholderia	cepacia complex	Burkholderia_cepacia
+bcereus	Bacillus	cereus
+bfragilis	Bacteroides	fragilis
+bhenselae	Bartonella	henselae
+blicheniformis_14	Bacillus	licheniformis
+bordetella_3	Bordetella	pertussis	Bordetella_pertussis
+borrelia	Borrelia
+bpseudomallei	Burkholderia	pseudomallei	Burkholderia_pseudomallei
+brachyspira	Brachyspira
+brachyspira_2	Brachyspira
+brachyspira_3	Brachyspira
+brachyspira_4	Brachyspira
+brachyspira_5	Brachyspira
+brucella	Brucella
+bsubtilis	Bacillus	subtilis
+bwashoensis	Bartonella	washoensis
+campylobacter	Campylobacter	jejuni/coli	Campylobacter
+campylobacter_nonjejuni	Campylobacter		Campylobacter
+campylobacter_nonjejuni_2	Campylobacter		Campylobacter
+campylobacter_nonjejuni_3	Campylobacter		Campylobacter
+campylobacter_nonjejuni_4	Campylobacter		Campylobacter
+campylobacter_nonjejuni_5	Campylobacter		Campylobacter
+campylobacter_nonjejuni_6	Campylobacter		Campylobacter
+campylobacter_nonjejuni_7	Campylobacter		Campylobacter
+campylobacter_nonjejuni_8	Campylobacter		Campylobacter
+campylobacter_nonjejuni_9	Campylobacter		Campylobacter
+cbotulinum	Clostridium	botulinum
+cdifficile	Clostridioides	difficile	Clostridioides_difficile
+cdiphtheriae	Corynebacterium	diphtheriae	Corynebacterium_diphtheriae
+cfreundii	Citrobacter	freundii	Citrobacter_freundii
+chlamydiales	Chlamydia
+cmaltaromaticum	Carnobacterium	maltaromaticum
+cperfringens	Clostridium	perfringens
+cronobacter	Cronobacter
+csepticum	Clostridium	septicum
+dnodosus	Dichelobacter	nodosus
+ecloacae	Enterobacter	cloacae	Enterobacter_cloacae
+ecoli	Escherichia	coli	Escherichia
+ecoli_achtman_4	Escherichia	coli	Escherichia
+edwardsiella	Edwardsiella
+efaecalis	Enterococcus	faecalis	Enterococcus_faecalis
+efaecium	Enterococcus	faecium	Enterococcus_faecium
+fpsychrophilum	Flavobacterium	psychrophilum
+gallibacterium	Gallibacterium
+geotrichum	Geotrichum
+halobacteria
+hcinaedi	Helicobacter	cinaedi
+helicobacter	Helicobacter	pylori	Helicobacter_pylori
+hinfluenzae	Haemophilus	influenzae	Haemophilus_influenzae
+hparasuis	Glaesserella	parasuis
+hsomni	Histophilus	somni
+hsuis	Helicobacter	suis
+kaerogenes	Klebsiella	aerogenes
+kingella	Kingella	kingae
+klebsiella	Klebsiella	pneumoniae	Klebsiella_pneumoniae
+koxytoca	Klebsiella	oxytoca	Klebsiella_oxytoca
+leptospira	Leptospira
+leptospira_2	Leptospira
+leptospira_3	Leptospira
+lgarvieae	Lactococcus	garvieae
+liberibacter	Liberibacter
+listeria_2	Listeria
+llactis_phage	Lactococcus	lactis
+lsalivarius	Ligilactobacillus	salivarius
+mabscessus	Mycobacteroides	abscessus
+magalactiae	Mycoplasma	agalactiae
+mamphoriforme	Mycoplasma	amphoriforme
+manserisalpingitidis	Mycoplasma	anserisalpingitidis
+mbovis	Mycoplasma	bovis
+mbovis_2	Mycoplasma	bovis
+mcanis	Macrococcus	canis
+mcaseolyticus	Macrococcus	caseolyticus
+mcatarrhalis_achtman_6	Moraxella	catarrhalis
+mflocculare	Mycoplasma	flocculare
+mgallisepticum	Mycoplasma	gallisepticum
+mgallisepticum_2	Mycoplasma	gallisepticum
+mgenitalium	Mycoplasma	genitalium
+mhaemolytica	Mannheimia	haemolytica
+mhominis	Mycoplasma	hominis
+mhominis_3	Mycoplasma	hominis
+mhyopneumoniae	Mycoplasma	hyopneumoniae
+mhyorhinis	Mycoplasma	hyorhinis
+mhyosynoviae	Mycoplasma	hyosynoviae
+miowae	Mycoplasma	iowae
+morganella	Morganella	morganii
+mplutonius	Melissococcus	plutonius
+mpneumoniae	Mycoplasma	pneumoniae
+msciuri	Mammaliicoccus	sciuri
+msynoviae	Mycoplasma	synoviae
+mycobacteria_2	Mycobacterium
+neisseria	Neisseria
+oralstrep	Streptococcus
+orhinotracheale	Ornithobacterium	rhinotracheale
+otsutsugamushi	Orientia	tsutsugamushi
+pacnes_3	Cutibacterium	acnes
+paeruginosa	Pseudomonas	aeruginosa	Pseudomonas_aeruginosa
+pdamselae	Photobacterium	damselae
+pfluorescens	Pseudomonas	fluorescens
+pgingivalis	Porphyromonas	gingivalis
+plarvae	Paenibacillus	larvae
+pmultocida	Pasteurella	multocida
+pmultocida_2	Pasteurella	multocida
+ppentosaceus	Pediococcus	pentosaceus
+pputida	Pseudomonas	putida
+proteus	Proteus	mirabilis
+providencia	Providencia
+psalmonis	Piscirickettsia	salmonis
+pstuartii	Providencia	stuartii
+ranatipestifer	Riemerella	anatipestifer
+rhodococcus	Rhodococcus
+sagalactiae	Streptococcus	agalactiae	Streptococcus_agalactiae
+salmonella	Salmonella	enterica	Salmonella
+saureus	Staphylococcus	aureus	Staphylococcus_aureus
+sbsec	Streptococcus	bovis/equinus complex
+scanis	Streptococcus	canis
+scapitis	Staphylococcus	capitis
+schromogenes	Staphylococcus	chromogenes
+sdysgalactiae	Streptococcus	dysgalactiae
+senterica_achtman_2	Salmonella	enterica	Salmonella
+sepidermidis	Staphylococcus	epidermidis	Staphylococcus_epidermidis
+serratia	Serratia	marcescens	Serratia_marcescens
+sgallolyticus	Streptococcus	gallolyticus
+shaemolyticus	Staphylococcus	haemolyticus
+shewanella	Shewanella
+shominis	Staphylococcus	hominis
+siniae	Streptococcus	iniae
+sinorhizobium	Sinorhizobium
+smaltophilia	Stenotrophomonas	maltophilia
+smitis	Streptococcus	mitis
+sparasuis	Streptococcus	parasuis
+spneumoniae	Streptococcus	pneumoniae	Streptococcus_pneumoniae
+spseudintermedius	Staphylococcus	pseudintermedius	Staphylococcus_pseudintermedius
+spyogenes	Streptococcus	pyogenes	Streptococcus_pyogenes
+ssuis	Streptococcus	suis
+staphlugdunensis	Staphylococcus	lugdunensis
+sthermophilus	Streptococcus	thermophilus
+streptomyces	Streptomyces
+streptothermophilus	Streptococcus	thermophilus
+suberis	Streptococcus	uberis
+szooepidemicus	Streptococcus	equi subsp. zooepidemicus
+taylorella	Taylorella
+tenacibaculum	Tenacibaculum
+tpallidum	Treponema	pallidum
+tpyogenes	Trueperella	pyogenes
+tvaginalis	Trichomonas	vaginalis
+ureaplasma	Ureaplasma
+vcholerae	Vibrio	cholerae	Vibrio_cholerae
+vcholerae_2	Vibrio	cholerae	Vibrio_cholerae
+vibrio	Vibrio
+vparahaemolyticus	Vibrio	parahaemolyticus	Vibrio_parahaemolyticus
+vtapetis	Vibrio	tapetis
+vvulnificus	Vibrio	vulnificus	Vibrio_vulnificus
+wolbachia	Wolbachia
+xfastidiosa	Xylella	fastidiosa
+yersinia	Yersinia
+ypseudotuberculosis_achtman_3	Yersinia	pseudotuberculosis
+yruckeri	Yersinia	ruckeri

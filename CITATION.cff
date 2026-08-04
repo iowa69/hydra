@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+title: "Hydra: unified AMR, virulence, point-mutation, heteroresistance, MLST and lineage typing from bacterial assemblies and raw reads"
+message: "If you use Hydra, please cite it and the reference databases it screened against (hydra db info NAME prints each one's citation)."
+type: software
+authors:
+  - given-names: "Hydra contributors"
+    affiliation: ""
+repository-code: "https://github.com/iowa69/hydra"
+url: "https://github.com/iowa69/hydra"
+abstract: >-
+  Hydra screens bacterial assemblies and raw reads for acquired resistance and
+  virulence genes, organism-specific resistance point mutations, multi-locus
+  sequence types and lineage typing schemes in a single pass over a single set
+  of databases. From raw reads it additionally measures allele fractions at
+  every catalogued mutation position, so heteroresistance - a resistance
+  mutation carried by only some copies of a multi-copy locus, as in the 23S rRNA
+  mutations behind linezolid resistance - is detected even though the assembly
+  consensus is wild type.
+keywords:
+  - antimicrobial resistance
+  - heteroresistance
+  - MLST
+  - bacterial genomics
+  - virulence
+  - linezolid
+license: MIT
+version: 1.0.0
+date-released: "2026-08-04"
