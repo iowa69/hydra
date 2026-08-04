@@ -1,4 +1,4 @@
-cff-version: 1.2.0
+cff-version: 1.3.0
 title: "Hydra: unified AMR, virulence, point-mutation, heteroresistance, MLST and lineage typing from bacterial assemblies and raw reads"
 message: "If you use Hydra, please cite it and the reference databases it screened against (hydra db info NAME prints each one's citation)."
 type: software
@@ -24,5 +24,5 @@ keywords:
   - virulence
   - linezolid
 license: MIT
-version: 1.2.0
+version: 1.3.0
 date-released: "2026-08-04"
