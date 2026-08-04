@@ -19,6 +19,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from ..utils import HydraError
+
 
 #: ``gyrA_S83L`` -> ref ``S``, position ``83``, alt ``L``; also ``pbp4_T-266A``,
 #: ``rplD_WR65del`` and ``mgrB_Q30STOP``.
@@ -105,6 +107,17 @@ def _parse_symbol(symbol: str, position: int) -> tuple[str, str, str]:
     return gene or symbol, ref, alt
 
 
+def _require_columns(path: Path, header: list[str], needed: tuple[str, ...]) -> dict[str, int]:
+    """Column indexes, with a clear error when the upstream table changes shape."""
+    idx = {name: i for i, name in enumerate(header)}
+    missing = [name for name in needed if name not in idx]
+    if missing:
+        raise HydraError(
+            f"{path.name} is missing the column(s) {', '.join(missing)}; the AMRFinderPlus "
+            f"data format has changed. Re-run 'hydra db import --force amrfinderplus'.")
+    return idx
+
+
 def _read_tsv(path: Path) -> tuple[list[str], list[list[str]]]:
     if not path.exists():
         return [], []
@@ -124,9 +137,13 @@ def _read_tsv(path: Path) -> tuple[list[str], list[list[str]]]:
 class MutationCatalog:
     """All mutation knowledge for one organism (or all organisms when unset)."""
 
-    def __init__(self, db_root: Path, organism: str | None = None):
+    def __init__(self, db_root: Path, organism: str | None = None,
+                 all_organisms: bool = False):
         self.db_root = Path(db_root)
         self.organism = organism
+        #: Only an explicit request loads every taxgroup at once; see
+        #: :meth:`_taxgroup_matches`.
+        self.all_organisms = all_organisms
         self.protein: dict[str, list[MutationEntry]] = {}
         self.dna: dict[str, list[MutationEntry]] = {}
         self.suppress: set[str] = set()
@@ -139,10 +156,15 @@ class MutationCatalog:
         """A catalogue row applies when its taxgroup is the organism or a parent of it.
 
         ``Escherichia`` covers ``Escherichia_coli``; ``Campylobacter`` covers all
-        campylobacters. With no organism set, everything matches.
+        campylobacters.
+
+        With no organism, nothing matches. Point mutations are only meaningful
+        against the species they were catalogued for: applying every taxgroup at
+        once to an unidentified genome reports Neisseria penA, Haemophilus ftsI
+        and Staphylococcus fusA resistance in the same sample.
         """
         if self.organism is None:
-            return True
+            return self.all_organisms
         if not taxgroup:
             return False
         org = self.organism
@@ -152,7 +174,9 @@ class MutationCatalog:
         prot_dir = self.db_root / "prot" / "amrfinderplus"
         header, rows = _read_tsv(prot_dir / "AMRProt-mutation.tsv")
         if header:
-            idx = {name: i for i, name in enumerate(header)}
+            idx = _require_columns(prot_dir / "AMRProt-mutation.tsv", header,
+                                   ("taxgroup", "accession_version", "mutation_position",
+                                    "standard_mutation_symbol", "class", "subclass"))
             for row in rows:
                 taxgroup = row[idx["taxgroup"]]
                 if not self._taxgroup_matches(taxgroup):
@@ -177,14 +201,17 @@ class MutationCatalog:
 
         header, rows = _read_tsv(prot_dir / "AMRProt-suppress.tsv")
         if header:
-            idx = {name: i for i, name in enumerate(header)}
+            idx = _require_columns(prot_dir / "AMRProt-suppress.tsv", header,
+                                   ("taxgroup", "protein_accession"))
             for row in rows:
                 if self._taxgroup_matches(row[idx["taxgroup"]]):
                     self.suppress.add(row[idx["protein_accession"]])
 
         header, rows = _read_tsv(prot_dir / "AMRProt-susceptible.tsv")
         if header:
-            idx = {name: i for i, name in enumerate(header)}
+            idx = _require_columns(prot_dir / "AMRProt-susceptible.tsv", header,
+                                   ("taxgroup", "accession_version", "resistance_cutoff",
+                                    "gene_symbol", "class", "subclass"))
             for row in rows:
                 if not self._taxgroup_matches(row[idx["taxgroup"]]):
                     continue

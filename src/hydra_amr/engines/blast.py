@@ -20,6 +20,9 @@ OUTFMT_FIELDS = (
     "qstart", "qend", "sstart", "send", "evalue", "bitscore",
     "slen", "qlen", "gaps", "nident",
 )
+#: Two hits of one reference this far apart on a query are separate copies.
+DEFAULT_SPAN_BUCKET = 10_000
+
 #: Appended when the caller needs the gapped alignment strings (mutation calling).
 ALIGNMENT_FIELDS = ("qseq", "sseq")
 OUTFMT = "6 " + " ".join(OUTFMT_FIELDS)
@@ -241,64 +244,92 @@ def merge_hsps(hsps: Sequence[Hsp], *, max_hsp_gap: int | None = None,
     for hsp in hsps:
         grouped.setdefault((hsp.qseqid, hsp.sseqid, hsp.strand), []).append(hsp)
 
-    best_by_pair: dict[tuple[str, str], MergedHit] = {}
-    for (qseqid, sseqid, strand), group in grouped.items():
-        group.sort(key=lambda h: h.bitscore, reverse=True)
-        slen = group[0].slen
+    best_by_pair: dict[tuple[str, str, int], MergedHit] = {}
+    for (qseqid, sseqid, strand), all_hsps in grouped.items():
+        slen = all_hsps[0].slen
         # A real locus cannot occupy much more query sequence than the reference
         # it matches; allow generous slack for assembly gaps and repeats.
         allowed_span = int(slen * query_scale * 2) + span_slack
-        kept: list[Hsp] = []
-        used: list[tuple[int, int]] = []
-        for hsp in group:
-            span = (hsp.sub_lo, hsp.sub_hi)
-            # Skip an HSP that mostly repeats subject territory already claimed.
-            if any(overlap_length(span, prev) > 0.5 * (span[1] - span[0] + 1) for prev in used):
-                continue
-            if kept:
-                if max_hsp_gap is not None and min(_query_gap(hsp, k) for k in kept) > max_hsp_gap:
-                    continue
-                q_lo = min([hsp.q_lo] + [k.q_lo for k in kept])
-                q_hi = max([hsp.q_hi] + [k.q_hi for k in kept])
-                if q_hi - q_lo + 1 > allowed_span:
-                    continue
-            kept.append(hsp)
-            used.append(span)
-        if not kept:
-            continue
-        intervals = merge_intervals((h.sub_lo, h.sub_hi) for h in kept)
-        covered = interval_length(intervals)
-        # Weight each HSP's identity by the reference it newly covers, so a pair
-        # of partly overlapping HSPs does not count their shared bases twice.
-        claimed: list[tuple[int, int]] = []
-        weighted_ident = 0.0
-        weighted_len = 0.0
-        for hsp in kept:
-            span = (hsp.sub_lo, hsp.sub_hi)
-            hsp_len = span[1] - span[0] + 1
-            already = sum(overlap_length(span, prev) for prev in claimed)
-            fresh = max(0, hsp_len - already)
-            if fresh and hsp_len:
-                share = fresh / hsp_len
-                weighted_ident += hsp.nident * share
-                weighted_len += hsp.length * share
-            claimed.append(span)
-        identity = (100.0 * weighted_ident / weighted_len) if weighted_len else 0.0
-        merged = MergedHit(
-            qseqid=qseqid, sseqid=sseqid, slen=slen, qlen=kept[0].qlen,
-            identity_pct=identity,
-            coverage_pct=(100.0 * covered / slen) if slen else 0.0,
-            covered_bases=covered, subject_intervals=intervals,
-            query_start=min(h.q_lo for h in kept), query_end=max(h.q_hi for h in kept),
-            strand=strand, gaps=sum(h.gaps for h in kept),
-            bitscore=sum(h.bitscore for h in kept), evalue=min(h.evalue for h in kept),
-            n_hsps=len(kept),
-        )
-        key = (qseqid, sseqid)
-        current = best_by_pair.get(key)
-        if current is None or merged.bitscore > current.bitscore:
-            best_by_pair[key] = merged
+        # Split the HSPs into one cluster per copy of the gene before merging.
+        # Two copies of a gene on one contig share the same reference territory,
+        # so a redundancy filter applied across both would throw the second away
+        # and report an amplification as a single copy.
+        for group in _cluster_by_query(all_hsps, allowed_span):
+            _merge_one(group, qseqid, sseqid, strand, slen, allowed_span,
+                       max_hsp_gap, best_by_pair)
     return list(best_by_pair.values())
+
+
+def _cluster_by_query(hsps: list[Hsp], allowed_span: int) -> list[list[Hsp]]:
+    """Group HSPs into runs that could belong to the same copy of a locus."""
+    ordered = sorted(hsps, key=lambda h: h.q_lo)
+    clusters: list[list[Hsp]] = []
+    for hsp in ordered:
+        if clusters and hsp.q_lo - max(h.q_hi for h in clusters[-1]) <= allowed_span:
+            clusters[-1].append(hsp)
+        else:
+            clusters.append([hsp])
+    return clusters
+
+
+def _merge_one(group: list[Hsp], qseqid: str, sseqid: str, strand: str, slen: int,
+               allowed_span: int, max_hsp_gap: int | None,
+               best_by_pair: dict[tuple[str, str, int], MergedHit]) -> None:
+    """Merge one cluster of HSPs into a single hit and record it."""
+    group = sorted(group, key=lambda h: h.bitscore, reverse=True)
+    kept: list[Hsp] = []
+    used: list[tuple[int, int]] = []
+    for hsp in group:
+        span = (hsp.sub_lo, hsp.sub_hi)
+        # Skip an HSP that mostly repeats subject territory already claimed.
+        if any(overlap_length(span, prev) > 0.5 * (span[1] - span[0] + 1) for prev in used):
+            continue
+        if kept:
+            if max_hsp_gap is not None and min(_query_gap(hsp, k) for k in kept) > max_hsp_gap:
+                continue
+            q_lo = min([hsp.q_lo] + [k.q_lo for k in kept])
+            q_hi = max([hsp.q_hi] + [k.q_hi for k in kept])
+            if q_hi - q_lo + 1 > allowed_span:
+                continue
+        kept.append(hsp)
+        used.append(span)
+    if not kept:
+        return
+    intervals = merge_intervals((h.sub_lo, h.sub_hi) for h in kept)
+    covered = interval_length(intervals)
+    # Weight each HSP's identity by the reference it newly covers, so a pair
+    # of partly overlapping HSPs does not count their shared bases twice.
+    claimed: list[tuple[int, int]] = []
+    weighted_ident = 0.0
+    weighted_len = 0.0
+    for hsp in kept:
+        span = (hsp.sub_lo, hsp.sub_hi)
+        hsp_len = span[1] - span[0] + 1
+        already = sum(overlap_length(span, prev) for prev in claimed)
+        fresh = max(0, hsp_len - already)
+        if fresh and hsp_len:
+            share = fresh / hsp_len
+            weighted_ident += hsp.nident * share
+            weighted_len += hsp.length * share
+        claimed.append(span)
+    identity = (100.0 * weighted_ident / weighted_len) if weighted_len else 0.0
+    merged = MergedHit(
+        qseqid=qseqid, sseqid=sseqid, slen=slen, qlen=kept[0].qlen,
+        identity_pct=identity,
+        coverage_pct=(100.0 * covered / slen) if slen else 0.0,
+        covered_bases=covered, subject_intervals=intervals,
+        query_start=min(h.q_lo for h in kept), query_end=max(h.q_hi for h in kept),
+        strand=strand, gaps=sum(h.gaps for h in kept),
+        bitscore=sum(h.bitscore for h in kept), evalue=min(h.evalue for h in kept),
+        n_hsps=len(kept),
+    )
+    # Keyed on where the hit sits, not just on the pair: a gene present in
+    # two copies on one contig is two hits, and keying on (query, subject)
+    # alone would report the amplification as a single copy.
+    key = (qseqid, sseqid, merged.query_start // max(1, DEFAULT_SPAN_BUCKET))
+    current = best_by_pair.get(key)
+    if current is None or merged.bitscore > current.bitscore:
+        best_by_pair[key] = merged
 
 
 def deduplicate(hits: Sequence, *, key_span, key_seq, key_score,

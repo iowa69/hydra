@@ -60,7 +60,10 @@ class ProteinScreener:
         out_tab = workdir / "amrfinderplus.blastx.tsv"
         hsps = blast(
             "blastx", batch.path, handle.fasta, out_tab,
-            threads=threads, evalue=1e-10, max_target_seqs=200,
+            # A contig carrying several resistance genes matches hundreds of
+            # alleles of each; a low cap makes BLAST discard whole genes at the
+            # preliminary stage, so this stays as generous as the nucleotide path.
+            threads=threads, evalue=1e-10, max_target_seqs=10000,
             with_alignment=True,
             # blastx-fast uses a longer seed word: ~4x quicker with no measurable
             # loss on references this similar. Composition-based statistics are

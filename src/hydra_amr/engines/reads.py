@@ -31,11 +31,27 @@ from .mutations import MutationCatalog, reference_index
 #: Per-base sequencing error rate assumed by the minority-allele significance test.
 BACKGROUND_ERROR_RATE = 0.002
 
-#: Reads excluded from every pileup: unmapped, secondary, supplementary,
-#: QC-failed and duplicate.
-PILEUP_FLAG_FILTER = 0x4 | 0x100 | 0x200 | 0x400 | 0x800
-#: Deep enough for an rRNA operon collapsed onto one reference.
-MAX_PILEUP_DEPTH = 1_000_000
+#: pysam's "all" stepper drops unmapped, secondary, QC-failed and duplicate
+#: reads while keeping the ones whose mate maps elsewhere. The "samtools"
+#: stepper would additionally discard those orphans, which on a gene-sized
+#: reference is most of the data; "nofilter" would keep everything, and
+#: silently ignores any flag_filter passed alongside it.
+PILEUP_STEPPER = "all"
+#: Multi-mapping reads carry a low mapping quality; counting them at full
+#: weight invents minority alleles at every position a paralogue overlaps.
+MIN_MAPPING_QUALITY = 20
+#: Deep enough for an rRNA operon collapsed onto one reference, without letting
+#: one column allocate unbounded memory.
+MAX_PILEUP_DEPTH = 200_000
+#: Allele fractions are only claimed once a site is this deep. The gene-detection
+#: floor is much lower, because "is this gene here" needs far less evidence than
+#: "what fraction of the population carries this base".
+MIN_VARIANT_DEPTH = 20
+#: Share of reads carrying an indel before a position is treated as indel-bearing.
+INDEL_EVIDENCE_FRACTION = 0.15
+#: A consensus base supported by only this share of the reads is not a clean
+#: majority; several such positions in one locus mean a mixed sample.
+MIXED_ALLELE_RANGE = (0.20, 0.80)
 
 #: rRNA operon copy numbers, used to translate an allele fraction into an
 #: estimated number of mutated operons.
@@ -88,10 +104,13 @@ class Variant:
     codon_position: int | None = None
     ref_aa: str = ""
     alt_aa: str = ""
+    #: The run's --fixed-allele-fraction, so "fixed" means the same here as it
+    #: does for the catalogued-site calls.
+    fixed_threshold: float = 0.9
 
     @property
     def is_fixed(self) -> bool:
-        return self.allele_fraction >= 0.9
+        return self.allele_fraction >= self.fixed_threshold
 
     @property
     def nucleotide_change(self) -> str:
@@ -117,10 +136,21 @@ class LocusConsensus:
     depth: float
     breadth: float
     variants: list[Variant] = field(default_factory=list)
+    #: Positions where a substantial share of the reads carry an insertion or
+    #: deletion. A consensus is always the reference's length, so an indel
+    #: cannot be represented in it - only flagged.
+    indel_sites: list[int] = field(default_factory=list)
+    #: Positions carrying a well-supported intermediate allele: the signature of
+    #: a mixed sample when they pile up across a housekeeping locus.
+    mixed_sites: list[int] = field(default_factory=list)
 
     @property
     def called_bases(self) -> int:
         return sum(1 for base in self.sequence if base != "-")
+
+    @property
+    def has_indel_evidence(self) -> bool:
+        return bool(self.indel_sites)
 
 
 @dataclass
@@ -183,6 +213,36 @@ def _count_alt(tokens: list[str], entry) -> int | None:
                 count += 1
         return count
     return None
+
+
+def _looks_like_cds(sequence: str) -> bool:
+    """True when *sequence* can be read as a single coding frame.
+
+    Several databases hold promoter regions, rRNA and intergenic replicons whose
+    length happens to be a multiple of three. Translating those would invent
+    amino-acid changes and, worse, discard real nucleotide variants as
+    "synonymous" in a frame that does not exist.
+    """
+    if len(sequence) < 60 or len(sequence) % 3:
+        return False
+    protein = translate(sequence, table_start_is_met=False)
+    if not protein:
+        return False
+    body = protein[:-1] if protein.endswith("*") else protein
+    return "*" not in body
+
+
+def _indel_count(tokens: list[str]) -> int:
+    """Reads whose alignment inserts or deletes sequence at this position."""
+    total = 0
+    for token in tokens:
+        if token.startswith("*"):
+            total += 1
+            continue
+        match = _PILEUP_TOKEN.match(token)
+        if match is not None and match.group("op"):
+            total += 1
+    return total
 
 
 def _annotate_codons(consensus: LocusConsensus, reference: str) -> None:
@@ -413,7 +473,8 @@ class ReadMapper:
     def consensus(self, bam: Path, references: dict[str, str], min_depth: int = 5,
                   min_base_quality: int = 13, min_allele_fraction: float = 0.1,
                   wanted: set[str] | None = None, min_alt_reads: int = 3,
-                  max_p_value: float = 1e-3) -> dict[str, LocusConsensus]:
+                  max_p_value: float = 1e-3, min_variant_depth: int = MIN_VARIANT_DEPTH,
+                  fixed_allele_fraction: float = 0.9) -> dict[str, LocusConsensus]:
         """Read the sequence the reads support at each reference, and its variants.
 
         This is what lets a FASTQ-only sample be typed and have its resistance
@@ -432,21 +493,39 @@ class ReadMapper:
                 bases = ["-"] * length
                 depths = [0] * length
                 variants: list[Variant] = []
+                indel_sites: list[int] = []
+                mixed_sites: list[int] = []
                 for column in align.pileup(reference, min_base_quality=min_base_quality,
-                                           max_depth=MAX_PILEUP_DEPTH, stepper="nofilter",
-                                           flag_filter=PILEUP_FLAG_FILTER, truncate=True):
+                                           min_mapping_quality=MIN_MAPPING_QUALITY,
+                                           max_depth=MAX_PILEUP_DEPTH, stepper=PILEUP_STEPPER,
+                                           truncate=True):
                     index = column.reference_pos
                     if index >= length:
                         continue
-                    counts = _base_counts([t.upper() for t in column.get_query_sequences(
-                        mark_matches=False, mark_ends=False, add_indels=True) if t])
-                    depth = sum(counts.values())
+                    tokens = [t.upper() for t in column.get_query_sequences(
+                        mark_matches=False, mark_ends=False, add_indels=True) if t]
+                    counts = _base_counts(tokens)
+                    indels = _indel_count(tokens)
+                    # Deleted positions count toward the depth: without them a
+                    # deletion looks like missing coverage rather than evidence.
+                    depth = sum(counts.values()) + indels
                     depths[index] = depth
                     if depth < min_depth or not counts:
                         continue
+                    if indels >= max(min_alt_reads, INDEL_EVIDENCE_FRACTION * depth):
+                        # A consensus is fixed to the reference's length, so an
+                        # indel cannot be written into it. Record the position so
+                        # callers know this locus is not simply a substitution
+                        # variant of the reference.
+                        indel_sites.append(index + 1)
                     best, best_count = max(counts.items(), key=lambda kv: (kv[1], kv[0]))
                     bases[index] = best
                     reference_base = sequence[index]
+                    if (depth >= MIN_VARIANT_DEPTH
+                            and MIXED_ALLELE_RANGE[0] <= best_count / depth <= MIXED_ALLELE_RANGE[1]):
+                        mixed_sites.append(index + 1)
+                    if depth < min_variant_depth:
+                        continue
                     for base, count in counts.items():
                         fraction = count / depth
                         if base == reference_base or fraction < min_allele_fraction:
@@ -455,24 +534,26 @@ class ReadMapper:
                         # is almost always a sequencing error, so a minority
                         # allele has to clear both a read count and the error
                         # model before it is called.
-                        if count < min_alt_reads and fraction < 0.9:
+                        if count < min_alt_reads and fraction < fixed_allele_fraction:
                             continue
                         p_value = binomial_upper_tail(count, depth, BACKGROUND_ERROR_RATE)
-                        if p_value > max_p_value and fraction < 0.9:
+                        if p_value > max_p_value and fraction < fixed_allele_fraction:
                             continue
                         variants.append(Variant(
                             reference=reference, position=index + 1,
                             ref_base=reference_base, alt_base=base, depth=depth,
-                            alt_count=count, allele_fraction=fraction))
+                            alt_count=count, allele_fraction=fraction,
+                            fixed_threshold=fixed_allele_fraction))
                 covered = sum(1 for d in depths if d >= min_depth)
                 deep = [d for d in depths if d > 0]
                 consensus = LocusConsensus(
                     reference=reference, sequence="".join(bases),
+                    indel_sites=indel_sites, mixed_sites=mixed_sites,
                     depth=(sum(deep) / len(deep)) if deep else 0.0,
                     breadth=100.0 * covered / length if length else 0.0,
                     variants=variants,
                 )
-                if length % 3 == 0:
+                if _looks_like_cds(sequence):
                     _annotate_codons(consensus, sequence)
                 out[reference] = consensus
         return out
@@ -490,9 +571,14 @@ class ReadMapper:
         reference_name = meta.get("accession") or consensus.reference
         catalogued: dict[str, object] = {}
         if catalog is not None:
-            accession = meta.get("accession", "")
-            for entry in catalog.protein.get(accession, []):
-                catalogued[entry.symbol.rsplit("_", 1)[-1].upper()] = entry
+            # Keyed on the gene symbol, not the accession: the catalogue records
+            # protein accessions while every nucleotide database carries a
+            # nucleotide one, so an accession lookup can never match.
+            wanted = gene.lower()
+            for entries in catalog.protein.values():
+                for entry in entries:
+                    if entry.gene.lower() == wanted:
+                        catalogued[entry.symbol.rsplit("_", 1)[-1].upper()] = entry
 
         def make(variant: Variant, entry, note: str, method: str) -> Hit:
             return Hit(
@@ -504,11 +590,13 @@ class ReadMapper:
                 sequence=consensus.reference, start=variant.position, end=variant.position,
                 strand="+", coverage=f"{variant.position}/{len(consensus.sequence)}",
                 coverage_pct=consensus.breadth,
-                identity_pct=100.0 * (1 - variant.allele_fraction),
+                identity_pct=reference_identity,
                 depth=float(variant.depth), allele_fraction=variant.allele_fraction,
                 method=method, resolution="POINT", note=note,
             )
 
+        called = consensus.called_bases or 1
+        reference_identity = 100.0 * (1 - len(consensus.variants) / called)
         hits: list[Hit] = []
         fixed: list[Variant] = []
         for variant in consensus.variants:
@@ -541,7 +629,6 @@ class ReadMapper:
             summary.resolution = "ALLELE"
             summary.start, summary.end = 1, len(consensus.sequence)
             summary.allele_fraction = None
-            summary.identity_pct = 100.0 * (1 - len(fixed) * 3 / max(1, len(consensus.sequence)))
             hits.append(summary)
         return hits
 
@@ -570,8 +657,8 @@ class ReadMapper:
                 observed: dict[int, list[str]] = {}
                 for column in align.pileup(reference, start=lo, stop=hi + 1, truncate=True,
                                            min_base_quality=min_base_quality,
-                                           max_depth=MAX_PILEUP_DEPTH, stepper="nofilter",
-                                           flag_filter=PILEUP_FLAG_FILTER):
+                                           min_mapping_quality=MIN_MAPPING_QUALITY,
+                                           max_depth=MAX_PILEUP_DEPTH, stepper=PILEUP_STEPPER):
                     if column.reference_pos not in wanted:
                         continue
                     # Indel annotations are kept: an entry such as ampC_G-15GG is

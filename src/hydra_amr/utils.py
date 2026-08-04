@@ -95,7 +95,7 @@ def run(
         raise HydraError(
             f"required executable not found: {cmd[0]}\n"
             f"Install it, or re-create the environment with:\n"
-            f"  conda install -c bioconda -c conda-forge {cmd[0]}"
+            f"  conda install -c bioconda -c conda-forge {conda_package(cmd[0])}"
         ) from exc
     finally:
         if stdout_handle is not None:
@@ -105,6 +105,19 @@ def run(
         err = (proc.stderr or "").strip()
         raise HydraError(f"{cmd[0]} failed (exit {proc.returncode}):\n{err[:4000]}")
     return proc
+
+
+#: Executables whose conda package is named differently.
+CONDA_PACKAGES = {
+    "blastn": "blast", "blastx": "blast", "tblastn": "blast",
+    "makeblastdb": "blast", "blastdbcmd": "blast", "blast_formatter": "blast",
+    "spades.py": "spades", "bcftools": "bcftools",
+}
+
+
+def conda_package(tool: str) -> str:
+    """The conda package that provides *tool*."""
+    return CONDA_PACKAGES.get(tool, tool)
 
 
 def have(tool: str) -> bool:
@@ -118,7 +131,7 @@ def require(tool: str, why: str = "") -> str:
         extra = f" ({why})" if why else ""
         raise HydraError(
             f"required executable '{tool}' not found on PATH{extra}.\n"
-            f"  conda install -c bioconda -c conda-forge {tool}"
+            f"  conda install -c bioconda -c conda-forge {conda_package(tool)}"
         )
     return path
 
@@ -136,11 +149,19 @@ def tempdir(prefix: str = "hydra.", keep: bool = False, parent: str | Path | Non
 
 
 def smart_open(path: str | Path, mode: str = "rt"):
-    """Open a plain or gzip-compressed file transparently."""
-    path = str(path)
-    if path.endswith(".gz"):
-        return gzip.open(path, mode)
-    return open(path, mode)
+    """Open a plain, gzip, bzip2 or xz file transparently."""
+    name = str(path)
+    if name.endswith(".gz"):
+        return gzip.open(name, mode)
+    if name.endswith(".bz2"):
+        import bz2  # noqa: PLC0415 - only needed for this suffix
+
+        return bz2.open(name, mode)
+    if name.endswith(".xz"):
+        import lzma  # noqa: PLC0415 - only needed for this suffix
+
+        return lzma.open(name, mode)
+    return open(name, mode)
 
 
 def is_gzip(path: str | Path) -> bool:

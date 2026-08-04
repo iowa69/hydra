@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import gzip
+import lzma
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -184,7 +186,8 @@ def fastq_stats(path: str | Path, sample_records: int = 20000) -> dict:
         lengths.append(len(seq))
         qual_sum += sum(ord(c) - 33 for c in qual)
         qual_bases += len(qual)
-        bytes_consumed += len(name) + 2 * len(seq) + len(qual) + 6
+        # '@', '+', four newlines: name + seq + qual + 6 bytes per record.
+        bytes_consumed += len(name) + len(seq) + len(qual) + 6
     if not lengths:
         return {"reads": 0, "mean_read_length": 0, "mean_quality": 0.0, "reads_estimated": False}
     mean_len = sum(lengths) / len(lengths)
@@ -207,6 +210,23 @@ def fastq_stats(path: str | Path, sample_records: int = 20000) -> dict:
     }
 
 
+class _Unreadable(HydraError):
+    """A file that cannot be decompressed or decoded."""
+
+
+def _read_error(path: str | Path, exc: Exception) -> HydraError:
+    name = str(path)
+    if isinstance(exc, (gzip.BadGzipFile, EOFError, lzma.LZMAError)) or "bz2" in type(exc).__module__:
+        return _Unreadable(
+            f"{name} could not be decompressed ({exc}).\n"
+            f"The file is either truncated or not compressed despite its name.")
+    if isinstance(exc, UnicodeDecodeError):
+        return _Unreadable(
+            f"{name} is not readable as text ({exc}).\n"
+            f"If it is compressed, give it the matching .gz, .bz2 or .xz suffix.")
+    return _Unreadable(f"{name} could not be read: {exc}")
+
+
 def validate_fasta(path: str | Path) -> None:
     """Raise HydraError when *path* is not a readable, non-empty FASTA."""
     p = Path(path)
@@ -214,12 +234,37 @@ def validate_fasta(path: str | Path) -> None:
         raise HydraError(f"input not found: {path}")
     if p.stat().st_size == 0:
         raise HydraError(f"input file is empty: {path}")
-    for _, seq in read_fasta(path):
-        if seq:
-            return
-        break
-    if _sniff(path) == "fastq":
-        raise HydraError(
-            f"{path} is named like an assembly but its contents are FASTQ.\n"
-            f"Pass reads with --reads, or with -1/-2 for a pair.")
+    try:
+        # Scan on: a leading placeholder record with no sequence does not make
+        # the rest of the assembly unusable.
+        for _, seq in read_fasta(path):
+            if seq:
+                return
+        if _sniff(path) == "fastq":
+            raise HydraError(
+                f"{path} is named like an assembly but its contents are FASTQ.\n"
+                f"Pass reads with --reads, or with -1/-2 for a pair.")
+    except (OSError, EOFError, UnicodeDecodeError, lzma.LZMAError) as exc:
+        raise _read_error(path, exc) from exc
     raise HydraError(f"no sequence records found in FASTA: {path}")
+
+
+def validate_fastq(path: str | Path) -> None:
+    """Raise HydraError when *path* is not a readable, non-empty FASTQ."""
+    p = Path(path)
+    if not p.exists():
+        raise HydraError(f"input not found: {path}")
+    if p.stat().st_size == 0:
+        raise HydraError(f"input file is empty: {path}")
+    try:
+        for _name, seq, qual in read_fastq_head(path, max_records=1):
+            if seq and len(seq) == len(qual):
+                return
+            raise HydraError(f"first FASTQ record in {path} is malformed "
+                             f"(sequence and quality lengths differ)")
+    except (OSError, EOFError, UnicodeDecodeError, lzma.LZMAError) as exc:
+        raise _read_error(path, exc) from exc
+    if _sniff(path) == "fasta":
+        raise HydraError(f"{path} is named like reads but its contents are FASTA.\n"
+                         f"Pass assemblies with -a/--assembly.")
+    raise HydraError(f"no reads found in FASTQ: {path}")

@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -30,7 +30,7 @@ excel = ["openpyxl>=3.0"]
 all = ["pysam>=0.19", "scipy>=1.7", "openpyxl>=3.0"]
 
 [project.scripts]
-hydra = "hydra.cli:main"
+hydra = "hydra_amr.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/iowa69/hydra"
@@ -40,4 +40,4 @@ Documentation = "https://github.com/iowa69/hydra#readme"
 where = ["src"]
 
 [tool.setuptools.package-data]
-hydra = ["data/**/*"]
+hydra_amr = ["data/**/*"]

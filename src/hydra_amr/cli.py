@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import os
 import shlex
 import sys
@@ -504,6 +505,17 @@ def cmd_run(args) -> int:
         LOG.warning("--cell %s only has values for read-derived hits, and this run has no "
                     "read input; the matrix will be empty", args.cell)
 
+    if not args.stdout and args.outdir is None:
+        raise HydraError("no output directory set; pass --outdir, or --stdout to write the "
+                         "long table to standard output")
+    if any(sep in args.prefix for sep in ("/", os.sep)):
+        raise HydraError(f"--prefix is a file basename, not a path (got '{args.prefix}')")
+    if "xlsx" in formats and importlib.util.find_spec("openpyxl") is None:
+        # Checked before the analysis runs: discovering it afterwards throws
+        # away the whole run.
+        raise HydraError("xlsx output needs openpyxl.\n"
+                         "  conda install -c conda-forge openpyxl")
+
     command = "hydra " + " ".join(shlex.quote(a) for a in sys.argv[1:])
     with tempdir(prefix="hydra.", keep=config.keep_temp, parent=config.tmp_dir) as workdir:
         pipeline = Pipeline(config, store, options)
@@ -548,7 +560,7 @@ def _print_recap(results, written) -> None:
         print(f"  {path}", file=sys.stderr)
 
 
-def cmd_screen(args) -> int:
+def cmd_screen(args) -> int:  # noqa: D401 - see below
     """Gene screening only - the abricate-shaped entry point.
 
     The analysis stages default to off here, but an explicit flag still wins:

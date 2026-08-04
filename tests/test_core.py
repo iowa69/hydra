@@ -7,24 +7,25 @@ from pathlib import Path
 
 import pytest
 
-from hydra.cli import collect_inputs
-from hydra.db.manager import _infer_class, _normalise_gene, parse_amrprot_header
-from hydra.db.registry import DB_GROUPS, resolve_names
-from hydra.engines.blast import (Hsp, deduplicate, interval_length, merge_hsps,
-                                 merge_intervals)
-from hydra.engines.mutations import (AlignedObservation, MutationEntry, _parse_symbol,
-                                     evaluate, reference_index, walk_alignment)
-from hydra.engines.nucl import build_query_batch
-from hydra.engines.reads import (LocusConsensus, ReadMapper, Variant, _annotate_codons,
-                                 _base_counts, _count_alt, binomial_upper_tail, pair_reads)
-from hydra.records import Hit, SampleResult, SpeciesCall, TypingResult
-from hydra.typing.lineage import _marker_group, resistance_score, virulence_score
-from hydra.typing.mlst import MlstTyper, SchemeProfiles
-from hydra.report.html import _format_cell
-from hydra.report.tables import (ABRICATE_COLUMNS, _coverage_glyph, abricate_table,
-                                 class_summary, long_table, matrix, summary_table)
-from hydra.report.writer import write_outputs
-from hydra.utils import HydraError, natural_key, revcomp, sample_name_from_path, translate
+from hydra_amr.cli import collect_inputs
+from hydra_amr.db.manager import _infer_class, _normalise_gene, parse_amrprot_header
+from hydra_amr.db.registry import DB_GROUPS, resolve_names
+from hydra_amr.engines.blast import (Hsp, deduplicate, interval_length, merge_hsps,
+                                     merge_intervals)
+from hydra_amr.engines.mutations import (AlignedObservation, MutationEntry, _parse_symbol,
+                                         evaluate, reference_index, walk_alignment)
+from hydra_amr.engines.nucl import build_query_batch
+from hydra_amr.engines.reads import (LocusConsensus, ReadMapper, Variant, _annotate_codons,
+                                     _base_counts, _count_alt, _indel_count, _looks_like_cds,
+                                     binomial_upper_tail, pair_reads)
+from hydra_amr.records import Hit, SampleResult, SpeciesCall, TypingResult
+from hydra_amr.typing.lineage import _marker_group, resistance_score, virulence_score
+from hydra_amr.typing.mlst import MlstTyper, SchemeProfiles
+from hydra_amr.report.html import _format_cell
+from hydra_amr.report.tables import (ABRICATE_COLUMNS, _coverage_glyph, abricate_table,
+                                     class_summary, long_table, matrix, summary_table)
+from hydra_amr.report.writer import write_outputs
+from hydra_amr.utils import HydraError, natural_key, revcomp, sample_name_from_path, translate
 
 
 # --------------------------------------------------------------------- utils
@@ -145,9 +146,10 @@ def test_merge_hsps_refuses_to_join_distant_query_fragments():
     right = _hsp(qstart=250_000, qend=250_450, sstart=451, send=900, length=450, nident=450,
                  slen=900, bitscore=790)
     merged = merge_hsps([left, right])
-    assert len(merged) == 1
-    assert merged[0].n_hsps == 1
-    assert merged[0].coverage_pct == pytest.approx(50.0)
+    # Two separate partial hits, each half the reference - not one full-length gene.
+    assert len(merged) == 2
+    assert all(m.n_hsps == 1 for m in merged)
+    assert all(m.coverage_pct == pytest.approx(50.0) for m in merged)
 
 
 def test_merge_hsps_still_joins_a_gene_split_by_an_assembly_gap():
@@ -568,6 +570,26 @@ def test_variant_hits_summarise_fixed_differences(tmp_path):
     assert "closest reference NG_1" in hits[0].note
 
 
+def test_looks_like_cds_rejects_a_non_coding_reference():
+    """Promoter and rRNA references can be length-divisible by three by chance."""
+    coding = "ATG" + "GCA" * 25 + "TAA"
+    assert _looks_like_cds(coding) is True
+    # Internal stop codons mean this frame is not a coding sequence.
+    assert _looks_like_cds("ATG" + "TAA" * 25 + "TAA") is False
+    assert _looks_like_cds("ACGT") is False
+
+
+def test_fixed_threshold_follows_the_run_setting():
+    strict = _variant(allele_fraction=0.8, fixed_threshold=0.9)
+    lenient = _variant(allele_fraction=0.8, fixed_threshold=0.5)
+    assert strict.is_fixed is False
+    assert lenient.is_fixed is True
+
+
+def test_indel_count_sees_deletions_and_insertions():
+    assert _indel_count(["A", "A+2GT", "*", "T-1N", "C"]) == 3
+
+
 def test_variant_hits_report_minority_alleles_individually():
     mapper = ReadMapper.__new__(ReadMapper)
     consensus = LocusConsensus(
@@ -642,6 +664,27 @@ def test_marker_group_separates_o_and_h_antigens():
     assert _marker_group("O88-2-wzy") == "O88"
     assert _marker_group("H7-6-fliC-origin") == "H7"
     assert _marker_group("ipaH_c") == "ipaH_c"
+
+
+def test_marker_group_leaves_numbered_alleles_to_their_locus():
+    """wzi alleles are numbered: they are one locus, not 500 separate markers."""
+    assert _marker_group("ipaH_c") == "ipaH_c"
+    assert _marker_group("O88-4-wzx") == "O88"
+    # A bare number is an allele id; the caller keeps the locus as the group.
+    assert _marker_group("64") == "64"
+    assert "64".split(".")[0].isdigit() is True
+    assert "ipaH_c".split(".")[0].isdigit() is False
+
+
+def test_merge_hsps_keeps_two_copies_of_one_gene():
+    """A duplicated gene is two hits; keying only on query/subject would hide one."""
+    first = _hsp(qstart=20_001, qend=20_861, sstart=1, send=861, length=861, nident=861,
+                 slen=861, bitscore=1500)
+    second = _hsp(qstart=60_862, qend=61_722, sstart=1, send=861, length=861, nident=861,
+                  slen=861, bitscore=1500)
+    merged = merge_hsps([first, second])
+    assert len(merged) == 2
+    assert {m.coverage_pct for m in merged} == {100.0}
 
 
 def _amr_hit(gene, drug_class="BETA-LACTAM", subclass="") -> Hit:

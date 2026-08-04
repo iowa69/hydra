@@ -194,8 +194,14 @@ class SampleResult:
             "virulence_genes": len({h.gene for h in primary if h.element_type == "VIRULENCE"}),
             "stress_genes": len({h.gene for h in primary if h.element_type == "STRESS"}),
             "plasmid_replicons": len({h.gene for h in primary if h.element_type == "PLASMID"}),
-            "point_mutations": len([h for h in primary if h.resolution == "POINT"]),
-            "heteroresistant_sites": len([h for h in self.hits if "HETERO" in h.note.upper()]),
+            "point_mutations": len([h for h in primary if h.resolution == "POINT"
+                                    and h.element_type == "AMR" and h.method != "VARIANTR"]),
+            # Only catalogued resistance mutations count: a read-derived variant
+            # in some other gene is an observation, not a resistance call.
+            "heteroresistant_sites": len([h for h in self.hits if h.method == "POINTR"
+                                          and h.element_type == "AMR"
+                                          and "HETERORESISTANT" in h.note.upper()]),
+            "gene_variants": len([h for h in self.hits if h.method in ("VARIANTR", "ALLELER")]),
         })
         row.update(self.scores)
         row.update({f"qc_{k}": v for k, v in self.qc.items()})

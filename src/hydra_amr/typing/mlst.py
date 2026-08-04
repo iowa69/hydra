@@ -30,6 +30,8 @@ MIN_LOCUS_COVERAGE = 60.0
 #: Read depth tapers at the ends of a reference, so a locus may still be called
 #: exact with this fraction of its length uncovered.
 MAX_UNCALLED_FRACTION = 0.02
+#: Intermediate-frequency sites in one locus before it is treated as mixed.
+MIXED_SITES_PER_LOCUS = 3
 
 
 @dataclass
@@ -402,6 +404,7 @@ class MlstTyper:
         mapped consensus rather than on assembled sequence.
         """
         by_scheme: dict[str, dict[str, LocusHit]] = defaultdict(dict)
+        caveats: dict[str, list[str]] = {}
         for reference, consensus in consensus_by_reference.items():
             entries = index.get(reference)
             if not entries or consensus.breadth < min_breadth:
@@ -414,6 +417,17 @@ class MlstTyper:
             if not covered:
                 continue
             complete = len(covered) >= (1.0 - MAX_UNCALLED_FRACTION) * len(called)
+            # A consensus is always the representative's length, so an allele
+            # that differs by an indel cannot be recovered from it and would be
+            # silently rounded to the nearest same-length allele - a confident
+            # wrong ST. The same applies to a mixed sample, whose consensus is a
+            # chimera. In both cases the locus is reported as inexact instead.
+            if consensus.has_indel_evidence:
+                complete = False
+                caveats.setdefault("indel", []).append(reference)
+            if len(consensus.mixed_sites) >= MIXED_SITES_PER_LOCUS:
+                complete = False
+                caveats.setdefault("mixed", []).append(reference)
             for scheme, locus in entries:
                 alleles = self.alleles_of(scheme, locus)
                 best_allele = ""
@@ -435,9 +449,16 @@ class MlstTyper:
                 )
         call = self._call_sample(dict(by_scheme), force_scheme, genus)
         call.source = "reads"
-        if call.scheme != "-":
-            call.note = ("; ".join(part for part in (call.note, "typed from mapped reads")
-                                   if part))
+        notes = [call.note, "typed from mapped reads"]
+        if caveats.get("indel"):
+            loci = ", ".join(sorted({r.split(".")[-1] for r in caveats["indel"]}))
+            notes.append(f"{loci} carry insertion/deletion evidence, so their alleles could "
+                         f"not be read off a fixed-length consensus and are not exact")
+        if caveats.get("mixed"):
+            loci = ", ".join(sorted({r.split(".")[-1] for r in caveats["mixed"]}))
+            notes.append(f"{loci} show intermediate allele fractions; this looks like a mixed "
+                         f"or contaminated sample and its consensus may be a chimera")
+        call.note = "; ".join(part for part in notes if part)
         return call
 
     def available_schemes(self) -> list[str]:

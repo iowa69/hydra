@@ -100,11 +100,13 @@ sorted out automatically), `--r1/--r2` pairs, or a sample sheet:
 ```bash
 hydra run --input-list samples.tsv -o results/
 ```
+The columns are `sample`, `assembly`, `R1`, `R2`, separated by tabs (commas are
+also accepted); leave a field empty when a sample has no assembly or no reads.
+
 ```
-# sample    assembly            R1                  R2
-KP001      KP001.fasta         KP001_R1.fq.gz      KP001_R2.fq.gz
-KP002      KP002.fasta
-KP003                          KP003_R1.fq.gz      KP003_R2.fq.gz
+KP001	KP001.fasta	KP001_R1.fq.gz	KP001_R2.fq.gz
+KP002	KP002.fasta
+KP003		KP003_R1.fq.gz	KP003_R2.fq.gz
 ```
 
 ## Heteroresistance
@@ -126,8 +128,8 @@ sample  gene  mutation    class          allele_fraction  depth  status
 s       23S   23S_G2577T  OXAZOLIDINONE  0.2004           464    heteroresistant
 ```
 
-with the detail column recording `AF=0.200; 93/464 reads; HETERORESISTANT;
-~1.0/5 operons; p=2.0e-152`. The p-value is the probability of seeing that many
+with the detail column recording `23S_G2577T; AF=0.200; 93/464 reads;
+HETERORESISTANT; ~1.0/5 operons; p=2e-152`. The p-value is the probability of seeing that many
 minority-allele reads from sequencing error alone.
 
 A mutation at or above `--fixed-allele-fraction` (default 0.90) is reported as
@@ -165,10 +167,15 @@ all the reads is summarised as one row — the gene is simply a different allele
 while a *minority* variant is reported on its own, since that is a mixed
 population and the assembly consensus would hide it.
 
+In the long table these arrive as ordinary rows, with `method` saying how the
+call was made — `POINTR` for a catalogued resistance mutation, `VARIANTR` for a
+minority variant that is not in the catalogue, `ALLELER` for the one-line
+summary of a gene that is simply a different allele:
+
 ```
-gene      change   AF     depth  note
-gyrA      S83L     0.24   112    vs closest reference NG_050497.1; HETERORESISTANT; catalogued as gyrA_S83L
-tet(A)    -        -      40     differs from its closest reference NG_048164.1 at 3 protein-changing positions
+gene    method    allele_fraction  depth  note
+gyrA    POINTR    0.24             112    gyrA S83L vs closest reference NG_050497.1; ...; HETERORESISTANT; catalogued as gyrA_S83L
+tet(A)  ALLELER                    40     tet(A) differs from its closest reference NG_048164.1 at 3 protein-changing position(s): ...
 ```
 
 Variant calling is gated by `--min-allele-reads` and a binomial test against a
@@ -202,6 +209,7 @@ Control what the matrix contains:
 --cell identity    # % identity of the best hit
 --cell coverage    # % of the reference covered
 --cell count       # number of copies
+--cell genes       # number of distinct genes
 --cell depth       # mean read depth
 --cell fraction    # allele fraction
 --cell symbol      # "identity/coverage"
@@ -246,7 +254,7 @@ A preset only sets defaults; anything you pass explicitly wins.
 ```
 hydra run       full analysis of assemblies and/or reads
 hydra screen    acquired-gene screening only (abricate-style)
-hydra db        list | import | download | info | check | remove
+hydra db        list | import | download | bundle | info | check | remove
 hydra presets   list the available presets
 ```
 

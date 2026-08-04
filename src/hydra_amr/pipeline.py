@@ -16,7 +16,8 @@ from .engines.nucl import NucleotideScreener, QueryBatch, build_query_batch
 from .engines.protein import ProteinScreener
 from .engines.reads import ReadMapper, ReadSet, assemble
 from .records import Hit, SampleResult
-from .seqio import assembly_stats, fastq_stats, read_fasta, validate_fasta
+from .seqio import (assembly_stats, fastq_stats, read_fasta, validate_fasta,
+                    validate_fastq)
 from .typing.lineage import LineageTyper, resistance_score, virulence_score
 from .typing.mlst import MlstTyper
 from .typing.species import SpeciesIdentifier
@@ -87,6 +88,10 @@ class Pipeline:
             if has_reads:
                 inputs.extend(str(p) for p in readsets[sample].files)
             results[sample] = SampleResult(sample=sample, input_type=kind, inputs=inputs)
+
+        for readset in readsets.values():
+            for path in readset.files:
+                validate_fastq(path)
 
         organism_by_sample: dict[str, str | None] = {}
         batch: QueryBatch | None = None
@@ -310,7 +315,7 @@ class Pipeline:
                     sample = futures[future]
                     try:
                         future.result()
-                    except HydraError as exc:
+                    except Exception as exc:  # noqa: BLE001 - one sample must not sink the run
                         LOG.error("read analysis of %s failed: %s", sample, exc)
                         results[sample].warnings.append(f"read analysis failed: {exc}")
             return
@@ -318,7 +323,7 @@ class Pipeline:
             try:
                 self._process_one_readset(sample, reads, results[sample], organism_by_sample,
                                           mapper, bam_dir, nucl_dbs, self.config.threads)
-            except HydraError as exc:
+            except Exception as exc:  # noqa: BLE001 - one sample must not sink the run
                 LOG.error("read analysis of %s failed: %s", sample, exc)
                 results[sample].warnings.append(f"read analysis failed: {exc}")
 
@@ -340,15 +345,20 @@ class Pipeline:
 
         # A sample that also has an assembly already has its acquired genes called
         # from contigs; its reads only add allele-fraction resolution.
-        if self.options.reads_genes and result.input_type == "reads" and nucl_dbs:
+        # A sample that also has an assembly already has its genes called from
+        # contigs, so its reads are mapped only to add allele fractions.
+        reads_only = result.input_type == "reads"
+        if nucl_dbs and ((self.options.reads_genes and reads_only)
+                         or self.options.reads_variants):
             for db_name in nucl_dbs:
                 handle = self.store.handle(db_name)
                 bam = mapper.align(reads, handle.fasta, bam_dir / f"{sample}.{db_name}.bam",
                                    threads=threads)
-                result.hits.extend(mapper.call_genes(sample, bam, db_name, handle))
+                if self.options.reads_genes and reads_only:
+                    result.hits.extend(mapper.call_genes(sample, bam, db_name, handle))
                 if self.options.reads_variants:
                     self._variants_from_reads(sample, result, mapper, bam, db_name, handle,
-                                              organism)
+                                              organism, reads_only=reads_only)
 
         if self.options.reads_mlst and not (result.mlst.scheme != "-"
                                             and result.mlst.source == "assembly"):
@@ -427,14 +437,26 @@ class Pipeline:
         if call.scheme == "-" and result.mlst.scheme != "-":
             return
         result.mlst = call
+        if "mixed or contaminated" in call.note:
+            result.warnings.append(
+                "MLST loci carry intermediate allele fractions: this sample looks mixed or "
+                "contaminated, and every read-derived call for it should be treated as such")
         LOG.info("%s: read MLST %s/%s (%d/%d loci)", sample, call.scheme, call.sequence_type,
                  call.loci_found, call.loci_total)
 
     def _variants_from_reads(self, sample: str, result: SampleResult, mapper: ReadMapper,
-                             bam: Path, db_name: str, handle, organism: str | None) -> None:
+                             bam: Path, db_name: str, handle, organism: str | None,
+                             reads_only: bool = True) -> None:
         """Report mutations in the resistance genes, measured against the closest reference."""
-        wanted = {hit.sequence for hit in result.hits
-                  if hit.database == db_name and hit.method == "READS"}
+        if reads_only:
+            wanted = {hit.sequence for hit in result.hits
+                      if hit.database == db_name and hit.method == "READS"}
+        else:
+            # Genes were called from the assembly, so the references worth
+            # inspecting are the ones those calls named.
+            called = {hit.gene for hit in result.hits if hit.database == db_name}
+            wanted = {seqid for seqid, meta in (handle.meta or {}).items()
+                      if meta.get("gene") in called}
         if not wanted:
             return
         sequences = {name: seq for name, seq in read_fasta(handle.fasta) if name in wanted}
@@ -443,6 +465,7 @@ class Pipeline:
             min_base_quality=self.options.min_base_quality,
             min_allele_fraction=self.config.thresholds.min_allele_fraction,
             wanted=wanted, min_alt_reads=self.config.thresholds.min_allele_reads,
+            fixed_allele_fraction=self.config.thresholds.fixed_allele_fraction,
         )
         catalog = MutationCatalog(self.store.root, organism) if organism else None
         for reference, locus in consensus.items():

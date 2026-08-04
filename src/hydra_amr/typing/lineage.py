@@ -185,11 +185,14 @@ class LineageTyper:
                 continue
             locus, allele = parts[0], ".".join(parts[1:])
             if not self.profiles(module).table:
-                # Schemes with no profile table (serotyping, pathovar markers)
-                # keep every allele in one FASTA, so the file stem is the same
-                # for all of them. Grouping on it would keep a single hit and
-                # make, for instance, the O antigen impossible to ever report.
-                locus = _marker_group(allele)
+                # Schemes with no profile table keep every allele in one FASTA,
+                # so the file stem is the same for all of them. Where the alleles
+                # are *named* - serotype antigens, pathovar markers - each name
+                # is its own thing to report. Where they are *numbered*, as in
+                # wzi, they are alleles of one locus and only the best belongs
+                # in the output.
+                if not allele.split(".")[0].isdigit():
+                    locus = _marker_group(allele)
             sample = piece.sample
             candidate = (allele, hit.identity_pct, hit.coverage_pct, hit.bitscore)
             current = found[sample][module].get(locus)
@@ -250,8 +253,10 @@ class LineageTyper:
                     # Conventional serotype notation, e.g. O121:H7.
                     call = ":".join(antigens)
                 else:
-                    call = "/".join(key if key != value[0] else str(value[0])
-                                    for key, value in groups)
+                    # The allele is the answer: a marker scheme names its
+                    # alleles after the marker, a single-locus scheme such as
+                    # wzi numbers them.
+                    call = "/".join(str(value[0]) for _key, value in groups)
                 lineage = "-"
             present = sum(1 for value in alleles.values() if value != "-")
             out.append(TypingResult(scheme=label, call=call, lineage=lineage or "-",

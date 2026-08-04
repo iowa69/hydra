@@ -136,7 +136,8 @@ class SpeciesIdentifier:
                 # AMRFinderPlus rules for the wrong taxgroup is worse than
                 # running none at all.
                 return sketch
-            call.evidence += f"; Mash {sketch.name} (d={sketch.distance:.4f})"
+            distance = f" (d={sketch.distance:.4f})" if sketch.distance is not None else ""
+            call.evidence += f"; Mash {sketch.name}{distance}"
         return call
 
     def identify_reads(self, reads: Path, threads: int = 1) -> SpeciesCall | None:

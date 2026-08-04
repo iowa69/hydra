@@ -56,6 +56,7 @@ def mlst_table(results: Sequence[SampleResult]) -> pd.DataFrame:
             "sample": result.sample,
             "scheme": result.mlst.scheme,
             "ST": result.mlst.sequence_type,
+            "source": result.mlst.source if result.mlst.scheme != "-" else "-",
             "loci_exact": result.mlst.loci_found,
             "loci_total": result.mlst.loci_total,
             "note": result.mlst.note,
@@ -242,12 +243,27 @@ def amrfinder_table(results: Sequence[SampleResult]) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=list(AMRFINDER_COLUMNS))
 
 
-def heteroresistance_table(results: Sequence[SampleResult]) -> pd.DataFrame:
-    """Point mutations called from reads, with their allele fractions."""
+#: Methods whose hits belong in the heteroresistance view: a catalogued site
+#: measured from reads, or a read-derived variant that matched the catalogue.
+HETERORESISTANCE_METHODS = ("POINTR",)
+
+
+def heteroresistance_table(results: Sequence[SampleResult],
+                           include_uncatalogued: bool = False) -> pd.DataFrame:
+    """Resistance point mutations called from reads, with their allele fractions.
+
+    Restricted to catalogued resistance mutations by default. Read-derived
+    variants in other genes are real observations but they are not resistance
+    calls, and mixing them in would bury a single 23S signal under hundreds of
+    rows of ordinary allele variation.
+    """
+    allowed = set(HETERORESISTANCE_METHODS) | ({"VARIANTR"} if include_uncatalogued else set())
     rows = []
     for result in results:
         for hit in result.hits:
-            if hit.allele_fraction is None:
+            if hit.allele_fraction is None or hit.method not in allowed:
+                continue
+            if hit.element_type != "AMR":
                 continue
             status = "heteroresistant" if "HETERORESISTANT" in hit.note.upper() else (
                 "fixed" if "FIXED" in hit.note.upper() else "detected")

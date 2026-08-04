@@ -13,9 +13,7 @@ build:
   number: 0
   script: {{ PYTHON }} -m pip install . --no-deps --no-build-isolation -vv
   entry_points:
-    - hydra = hydra.cli:main
-  run_exports:
-    - {{ pin_subpackage(name, max_pin="x") }}
+    - hydra = hydra_amr.cli:main
 
 requirements:
   host:
@@ -36,10 +34,10 @@ requirements:
 
 test:
   imports:
-    - hydra
-    - hydra.engines
-    - hydra.typing
-    - hydra.report
+    - hydra_amr
+    - hydra_amr.engines
+    - hydra_amr.typing
+    - hydra_amr.report
   commands:
     - hydra --version
     - hydra --help
