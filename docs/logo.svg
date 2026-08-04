@@ -9,29 +9,32 @@
     </linearGradient>
   </defs>
 
-  <rect width="512" height="512" rx="116" fill="url(#hydraTile)"/>
+  <rect x="0" y="0" width="512" height="512" rx="116" fill="url(#hydraTile)"/>
 
-  <!-- The monogram is one white silhouette: uprights, crossbar and the two
-       heads overlap, so they read as a single continuous creature. Each head
-       is a teardrop - wide at the jaw, tapering to the snout - turned outward. -->
+  <!-- Uprights, crossbar and heads are one white silhouette, so they read as a
+       single creature rather than a letter with things stuck on it. Each head
+       overlaps the top of its upright and is turned outward, which keeps the
+       pair from reading as a face. -->
   <g fill="#ffffff">
-    <rect x="146" y="150" width="62" height="254" rx="26"/>
-    <rect x="304" y="150" width="62" height="254" rx="26"/>
-    <rect x="146" y="256" width="220" height="58" rx="26"/>
-    <g transform="translate(177 158) rotate(-27)">
-      <path d="M 0 -60 C 20 -52 38 -30 38 -6 C 38 20 21 38 0 38
-               C -21 38 -38 20 -38 -6 C -38 -30 -20 -52 0 -60 Z"/>
+    <rect x="152" y="152" width="62" height="250" rx="31"/>
+    <rect x="298" y="152" width="62" height="250" rx="31"/>
+    <rect x="152" y="250" width="208" height="58" rx="29"/>
+    <g transform="translate(173 152) rotate(-24)">
+      <path d="M 0 -59 C 22 -52 36 -20 36 8 C 36 31 23 39 0 39
+               C -23 39 -36 31 -36 8 C -36 -20 -22 -52 0 -59 Z"/>
     </g>
-    <g transform="translate(335 158) rotate(27)">
-      <path d="M 0 -60 C 20 -52 38 -30 38 -6 C 38 20 21 38 0 38
-               C -21 38 -38 20 -38 -6 C -38 -30 -20 -52 0 -60 Z"/>
+    <g transform="translate(339 152) rotate(24)">
+      <path d="M 0 -59 C 22 -52 36 -20 36 8 C 36 31 23 39 0 39
+               C -23 39 -36 31 -36 8 C -36 -20 -22 -52 0 -59 Z"/>
     </g>
   </g>
 
-  <!-- One eye per head, cut back to the tile colour: a serpent seen from the
-       side shows one eye, and two would read as a face looking outward. -->
+  <!-- One eye per head, cut back to the tile colour and set on the outer side.
+       A serpent in profile shows one eye; two would look forward and turn the
+       mark into a face. Below about 32px these drop out and it degrades to a
+       plain H, which is the intended fallback. -->
   <g fill="url(#hydraTile)">
-    <ellipse cx="164" cy="140" rx="9" ry="11" transform="rotate(-27 164 140)"/>
-    <ellipse cx="348" cy="140" rx="9" ry="11" transform="rotate(27 348 140)"/>
+    <g transform="translate(173 152) rotate(-24)"><ellipse cx="-12" cy="-4" rx="8" ry="10"/></g>
+    <g transform="translate(339 152) rotate(24)"><ellipse cx="12" cy="-4" rx="8" ry="10"/></g>
   </g>
 </svg>
