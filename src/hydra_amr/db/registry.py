@@ -200,8 +200,13 @@ def resolve_names(names: list[str]) -> list[str]:
 
 
 #: What "hydra db download" installs when no names are given: enough for
-#: --preset standard to run.
-DEFAULT_DOWNLOADS = ("protein", "ncbi", "card", "vfdb")
+#: --preset standard to run, MLST included.
+DEFAULT_DOWNLOADS = ("protein", "ncbi", "card", "vfdb", "pubmlst", "lineage", "species")
+
+#: Roughly how long each download takes, for the message printed before starting.
+#: PubMLST is a thousand small files and is the only one worth warning about.
+SLOW_DOWNLOADS = {"pubmlst": "takes several minutes: about 1200 files",
+                  "lineage": "pulls a 70 MB release archive, shared with species"}
 
 
 def protein_dir(db_root: Path | str) -> Path:

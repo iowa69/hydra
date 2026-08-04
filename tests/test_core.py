@@ -10,7 +10,7 @@ import pytest
 from hydra_amr.cli import collect_inputs
 from hydra_amr.db.manager import _infer_class, _normalise_gene, parse_amrprot_header
 from hydra_amr.db.fetch import (can_fetch, card_header, cge_header, ncbi_header,
-                                vfdb_header)
+                                pubmlst_organism, pubmlst_scheme_name, vfdb_header)
 from hydra_amr.db.registry import DB_GROUPS, resolve_names
 from hydra_amr.engines.blast import (Hsp, deduplicate, interval_length, merge_hsps,
                                      merge_intervals)
@@ -22,6 +22,7 @@ from hydra_amr.engines.reads import (LocusConsensus, ReadMapper, Variant, _annot
                                      binomial_upper_tail, pair_reads)
 from hydra_amr.records import Hit, SampleResult, SpeciesCall, TypingResult
 from hydra_amr.typing.lineage import _marker_group, resistance_score, virulence_score
+from hydra_amr.typing.species import SchemeOrganism, _inherit_organism_by_species
 from hydra_amr.typing.mlst import MlstTyper, SchemeProfiles
 from hydra_amr.report.html import _format_cell
 from hydra_amr.report.tables import (GENE_COLUMNS, _coverage_glyph, class_summary,
@@ -857,7 +858,66 @@ def test_vfdb_keeps_upstreams_accession_as_a_gene_symbol():
     assert vfdb_header(header) == "vfdb~~~AAC38364~~~AAC38364~~~Orf1"
 
 
-def test_only_databases_with_a_stable_source_are_fetchable():
-    assert can_fetch("ncbi") and can_fetch("protein") and can_fetch("vfdb")
-    # Scheme names cannot be reproduced from upstream, so this one is never guessed.
-    assert not can_fetch("pubmlst")
+def test_every_database_a_full_install_needs_can_be_fetched():
+    for name in ("ncbi", "card", "vfdb", "protein", "resfinder", "plasmidfinder",
+                 "pubmlst", "lineage", "species"):
+        assert can_fetch(name), name
+    # Published only as a landing page, so it still has to be fetched by hand.
+    assert not can_fetch("argannot")
+
+
+# --------------------------------------------------------------------- PubMLST
+def _profiles(slug: str, scheme: int = 1) -> str:
+    return f"https://rest.pubmlst.org/db/pubmlst_{slug}_seqdef/schemes/{scheme}/profiles_csv"
+
+
+def test_pubmlst_scheme_name_uses_the_database_slug():
+    assert pubmlst_scheme_name("Klebsiella pneumoniae species complex",
+                               _profiles("klebsiella")) == "klebsiella"
+    assert pubmlst_scheme_name("Enterococcus faecium", _profiles("efaecium")) == "efaecium"
+
+
+def test_pubmlst_scheme_name_numbers_a_databases_second_scheme():
+    assert pubmlst_scheme_name("Acinetobacter baumannii#1",
+                               _profiles("abaumannii")) == "abaumannii"
+    assert pubmlst_scheme_name("Acinetobacter baumannii#2",
+                               _profiles("abaumannii", 2)) == "abaumannii_2"
+
+
+def test_pubmlst_scheme_name_keeps_the_spelling_already_in_use():
+    """The derived name for these differs from what everything else calls them."""
+    assert pubmlst_scheme_name("Escherichia coli#1",
+                               _profiles("escherichia")) == "ecoli_achtman_4"
+    assert pubmlst_scheme_name("Escherichia coli#2", _profiles("ecoli")) == "ecoli"
+
+
+def test_pubmlst_scheme_name_rejects_an_unparseable_url():
+    assert pubmlst_scheme_name("Whatever", "https://example.org/nothing") == ""
+
+
+@pytest.mark.parametrize("label,expected", [
+    ("Escherichia coli#1", ("Escherichia", "coli")),
+    ("Klebsiella pneumoniae species complex", ("Klebsiella", "pneumoniae")),
+    ("Achromobacter spp.", ("Achromobacter", "")),
+    ("Campylobacter jejuni", ("Campylobacter", "jejuni")),
+])
+def test_pubmlst_organism_parsing(label, expected):
+    assert pubmlst_organism(label) == expected
+
+
+def test_scheme_inherits_its_taxgroup_from_its_species():
+    """A scheme name the curated table has never seen must still map to an organism."""
+    table = _inherit_organism_by_species({
+        "ecoli_achtman_4": SchemeOrganism("Escherichia", "coli", "Escherichia"),
+        "escherichia_9": SchemeOrganism("Escherichia", "coli", ""),
+    })
+    assert table["escherichia_9"].organism == "Escherichia"
+
+
+def test_species_inheritance_does_not_guess_across_an_ambiguous_genus():
+    table = _inherit_organism_by_species({
+        "kpneumoniae": SchemeOrganism("Klebsiella", "pneumoniae", "Klebsiella_pneumoniae"),
+        "koxytoca": SchemeOrganism("Klebsiella", "oxytoca", "Klebsiella_oxytoca"),
+        "kother": SchemeOrganism("Klebsiella", "variicola", ""),
+    })
+    assert table["kother"].organism == ""

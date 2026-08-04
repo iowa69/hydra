@@ -54,25 +54,36 @@ conda create -n hydra -c conda-forge -c bioconda hydra-amr
 conda activate hydra
 ```
 
-Then get the reference databases. One command, nothing else installed, about a
-minute:
+Then get the reference databases. One command, with nothing else installed:
 
 ```bash
-hydra db download          # fetches from NCBI, CARD and VFDB and converts them
+hydra db download          # everything: genes, mutations, MLST, lineage, sketches
 hydra run -a isolate.fasta -o results/
 ```
 
-That covers acquired-gene screening and point mutations. MLST, lineage typing
-and species sketches are **not** downloaded automatically — PubMLST publishes no
-scheme names, and inventing them would silently mis-assign schemes to species —
-so for those, either convert copies already on the machine or install a bundle:
+That is a complete install — acquired genes, point mutations, all PubMLST
+schemes, lineage typing and the Mash species sketches. The gene and mutation
+references take about a minute; PubMLST is a thousand small files and runs
+several minutes more, so name a subset when MLST is not needed:
 
 ```bash
-hydra db import                           # from reference data in conda envs
+hydra db download ncbi card vfdb protein  # the quick subset
+hydra db import                           # convert copies already in conda envs
 hydra db download --from-file hydra-db.tar.gz   # from a bundle
 hydra db download --list                  # every source, licence and citation
 hydra db list                             # what is installed now
 ```
+
+Five smaller databases — ARG-ANNOT, MEGARes, EcOH, *E. coli* VF and VFDB's full
+set — are published as landing pages rather than versioned files, so they are
+the one thing `hydra db import` or `--source` still has to supply.
+
+A PubMLST scheme whose profile table or any single locus fails to download is
+discarded rather than installed half-built: a scheme missing one locus would type
+every isolate as an incomplete profile instead of failing. PubMLST throttles, so
+the download is deliberately unhurried and backs off when asked to wait. On the
+69-genome validation set, a store built entirely by `hydra db download` gives
+**69/69 identical scheme and ST calls** to one converted from local installs.
 
 Databases live in `$HYDRA_DB` (default `~/.hydra/db`).
 
@@ -398,7 +409,7 @@ hydra presets   list the available presets
 ```
 
 ```
-hydra db download              fetch NCBI, CARD and VFDB from upstream and import
+hydra db download              fetch and import every database with a stable source
 hydra db download NAME...      fetch only these
 hydra db download --list       print every source, licence and citation
 hydra db download --from-file  install a prebuilt bundle

@@ -15,8 +15,8 @@ from .config import (CELL_MODES, ELEMENT_TYPES, FORMAT_ALIASES, MATRIX_FIELDS,
                      OUTPUT_FORMATS, Config, Thresholds, default_db_dir)
 from .db.fetch import can_fetch
 from .db.manager import DatabaseStore, create_bundle, download_bundle, install_bundle
-from .db.registry import (DATABASES, DB_GROUPS, DEFAULT_DOWNLOADS, protein_dir,
-                          resolve_names, spec_for)
+from .db.registry import (DATABASES, DB_GROUPS, DEFAULT_DOWNLOADS, SLOW_DOWNLOADS,
+                          protein_dir, resolve_names, spec_for)
 from .engines.reads import ReadSet, pair_reads
 from .pipeline import Pipeline, RunOptions
 from .report.writer import write_outputs
@@ -817,6 +817,13 @@ def _fetch_databases(store: DatabaseStore, fetchable: list[str], asked: list[str
     """Download and import each database that has an automatic source."""
     force = getattr(args, "force", False)
     manual = [n for n in asked if not can_fetch(n)]
+    todo = [n for n in fetchable if force or not store.is_installed(n)]
+    if todo:
+        print(f"downloading {len(todo)} database(s) into {store.root}: {', '.join(todo)}")
+        for name in todo:
+            if name in SLOW_DOWNLOADS:
+                print(f"  {name} {SLOW_DOWNLOADS[name]}")
+        print()
     done, failed, skipped = [], [], []
     for name in fetchable:
         if store.is_installed(name) and not force:
@@ -836,13 +843,9 @@ def _fetch_databases(store: DatabaseStore, fetchable: list[str], asked: list[str
         print(f"installed {len(done)} database(s): {', '.join(done)}")
     if manual:
         print(f"\nno automatic source for: {', '.join(manual)}")
-        print("  hydra db download --list      # where to get them by hand")
-    if not store.is_installed("pubmlst"):
-        print("\nMLST and lineage typing need pubmlst/lineage/species, which are not\n"
-              "downloaded automatically: PubMLST publishes no scheme names, and inventing\n"
-              "them would silently mis-assign schemes to species. Get them with:\n"
-              "  hydra db import                        # from tools on this machine\n"
-              "  hydra db download --from-file DB.tar.gz  # from a bundle")
+        print("  these are published as landing pages rather than versioned files;")
+        print("  'hydra db download --list' says where each one lives, and")
+        print("  'hydra db import' converts a copy already on this machine.")
     if failed:
         print(f"\nfailed: {', '.join(failed)}")
         return 1

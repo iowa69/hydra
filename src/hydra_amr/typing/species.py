@@ -70,6 +70,36 @@ def load_scheme_table(store: DatabaseStore | None = None) -> dict[str, SchemeOrg
                     # Curated entries win; the installed map only fills gaps.
                     if scheme and scheme not in table:
                         table[scheme] = SchemeOrganism(parts[1].strip(), parts[2].strip(), "")
+    return _inherit_organism_by_species(table)
+
+
+def _inherit_organism_by_species(table: dict[str, SchemeOrganism]) -> dict[str, SchemeOrganism]:
+    """Give a scheme the AMRFinderPlus organism curated for its species.
+
+    The curated table is keyed by scheme name, but scheme names are a naming
+    convention rather than data: a store built straight from PubMLST can hold a
+    scheme the curated table has never seen, or the same scheme under a different
+    name. What identifies the organism is the genus and species, so any entry that
+    knows those but not its taxgroup borrows it from a curated entry that does.
+    Without this, an unrecognised scheme name silently disables point mutations
+    for that isolate.
+    """
+    by_species: dict[tuple[str, str], str] = {}
+    for entry in table.values():
+        if entry.organism and entry.genus:
+            by_species.setdefault((entry.genus, entry.species), entry.organism)
+    # A genus-only fallback covers schemes named for a species complex.
+    by_genus: dict[str, str] = {}
+    for (genus, _species), organism in by_species.items():
+        if by_genus.setdefault(genus, organism) != organism:
+            by_genus[genus] = ""  # ambiguous within the genus, so do not guess
+
+    for scheme, entry in table.items():
+        if entry.organism or not entry.genus:
+            continue
+        organism = by_species.get((entry.genus, entry.species)) or by_genus.get(entry.genus, "")
+        if organism:
+            table[scheme] = SchemeOrganism(entry.genus, entry.species, organism)
     return table
 
 
