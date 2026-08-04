@@ -659,6 +659,10 @@ def cmd_db(args) -> int:
     if action == "check":
         problems = 0
         stale: list[str] = []
+        if not store.installed():
+            print(f"no databases installed in {store.root}\n\n"
+                  f"Install them with:  hydra db import")
+            return 1
         have_amrfinder = store.is_installed("amrfinderplus")
         for name, entry in sorted(store.installed().items()):
             path = store.root / entry.get("path", "")

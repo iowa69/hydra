@@ -263,7 +263,9 @@ hydra presets   list the available presets
 `--auto-organism/--no-auto-organism`, `--plus`, `--mlst/--no-mlst`, `--scheme`,
 `--typing/--no-typing`, `--protein/--no-protein`,
 `--point-mutations/--no-point-mutations`,
-`--heteroresistance/--no-heteroresistance`, `--assemble`
+`--heteroresistance/--no-heteroresistance`,
+`--reads-mlst/--no-reads-mlst`, `--reads-variants/--no-reads-variants`,
+`--report-synonymous`, `--assemble`
 
 **Thresholds** — `--min-identity`, `--min-coverage`, `--protein-min-identity`,
 `--protein-min-coverage`, `--min-contig-length`, `--report-overlaps`
