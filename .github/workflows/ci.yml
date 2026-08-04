@@ -28,7 +28,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install .[all] pytest pyflakes
       - name: Lint
-        run: python -m pyflakes src/hydra tests
+        run: python -m pyflakes src/hydra_amr tests
       - name: Test
         run: python -m pytest tests/test_core.py -q
       - name: CLI smoke test
@@ -58,16 +58,29 @@ jobs:
         run: |
           conda install -y python=3.11 blast minimap2 samtools mash pysam pandas numpy scipy openpyxl pytest
           pip install .
-      - name: Build a toy database and screen an assembly
+      - name: Screen an assembly against a database built on the fly
         run: |
-          mkdir -p toydb/src
-          printf '>toy~~~blaTOY-1~~~NG_000001.1~~~toy carbapenemase\nATGAGTATTCAACATTTCCGTGTCGCCCTTATTCCCTTTTTTGCGGCATTTTGCCTTCCTGTTTTTGCTCACCCAGAAACGCTGGTGAAAGTAAAAGATGCTGAAGATCAGTTGGGTGCACGAGTGGGTTACATCGAACTGGATCTCAACAGCGGTAAGATCCTTGAGAGTTTTCGCCCCGAAGAACGTTTTCCAATGATGAGCACTTTTAAAGTTCTGCTATGTGGCGCGGTATTATCCCGTGTTGACGCCGGGCAAGAGCAACTCGGTCGCCGCATACACTATTCTCAGAATGACTTGGTTGAGTACTCACCAGTCACAGAAAAGCATCTTACGGATGGCATGACAGTAAGAGAATTATGCAGTGCTGCCATAACCATGAGTGATAACACTGCGGCCAACTTACTTCTGACAACGATCGGAGGACCGAAGGAGCTAACCGCTTTTTTGCACAACATGGGGGATCATGTAACTCGCCTTGATCGTTGGGAACCGGAGCTGAATGAAGCCATACCAAACGACGAGCGTGACACCACGATGCCTGTAGCAATGGCAACAACGTTGCGCAAACTATTAACTGGCGAACTACTTACTCTAGCTTCCCGGCAACAATTAATAGACTGGATGGAGGCGGATAAAGTTGCAGGACCACTTCTGCGCTCGGCCCTTCCGGCTGGCTGGTTTATTGCTGATAAATCTGGAGCCGGTGAGCGTGGGTCTCGCGGTATCATTGCAGCACTGGGGCCAGATGGTAAGCCCTCCCGTATCGTAGTTATCTACACGACGGGGAGTCAGGCAACTATGGATGAACGAAATAGACAGATCGCTGAGATAGGTGCCTCACTGATTAAGCATTGGTAA\n' > toydb/src/sequences
-          HYDRA_DB=$PWD/toydb hydra db import --source toydb/src ncbi || true
-          printf '>contig1\n' > toy.fasta
-          tail -n +2 toydb/src/sequences >> toy.fasta
-          HYDRA_DB=$PWD/toydb hydra screen -a toy.fasta -d ncbi --stdout || true
-      - name: Errors are clear without databases
+          set -euo pipefail
+          python - <<'PY'
+          import pathlib, random
+          random.seed(1)
+          gene = "ATG" + "".join(random.choice("ACGT") for _ in range(897)) + "TAA"
+          flank = lambda n: "".join(random.choice("ACGT") for _ in range(n))
+          src = pathlib.Path("toydb/src"); src.mkdir(parents=True, exist_ok=True)
+          src.joinpath("sequences").write_text(
+              f">ncbi~~~blaTOY-1~~~NG_000001.1~~~toy carbapenemase\n{gene}\n")
+          # The gene sits inside a contig, so this exercises the real path.
+          pathlib.Path("toy.fasta").write_text(f">contig1\n{flank(5000)}{gene}{flank(5000)}\n")
+          PY
+          HYDRA_DB=$PWD/toydb hydra db import --source toydb/src ncbi
+          HYDRA_DB=$PWD/toydb hydra screen -a toy.fasta -d ncbi --stdout | tee screen.tsv
+          grep -q "blaTOY-1" screen.tsv
+          awk -F'\t' 'NR==2 && ($15+0) < 99.9 { print "coverage too low:", $15; exit 1 }' screen.tsv
+      - name: Errors are clear when no database is installed
         run: |
+          set -euo pipefail
           mkdir -p emptydb
-          hydra db list --db-dir emptydb || true
-          hydra run -a toy.fasta --db-dir emptydb -o out 2>&1 | tail -3
+          ! hydra db list --db-dir emptydb
+          ! hydra db check --db-dir emptydb
+          ! hydra run -a toy.fasta --db-dir emptydb -o out 2>err.txt
+          grep -q "hydra db import" err.txt
