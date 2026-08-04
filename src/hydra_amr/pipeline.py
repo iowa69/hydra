@@ -117,7 +117,27 @@ class Pipeline:
             result.runtime_seconds = time.time() - started
 
         LOG.info("analysed %d samples in %s", len(results), human_time(time.time() - started))
+        self._warn_about_empty(results)
         return [results[sample] for sample in samples]
+
+    def _warn_about_empty(self, results: dict[str, SampleResult]) -> None:
+        """Say so when a sample produced nothing, rather than writing a bare header.
+
+        An empty table is ambiguous: a genuinely susceptible isolate looks exactly
+        like a wrong --organism, a database that was never installed, or reads that
+        did not map. Naming the likely causes turns a silent result into a check.
+        """
+        empty = [name for name, result in results.items() if not result.hits]
+        if not empty:
+            return
+        listed = ", ".join(empty[:5]) + (f" (+{len(empty) - 5} more)" if len(empty) > 5 else "")
+        LOG.warning("no hits for %d of %d sample(s): %s", len(empty), len(results), listed)
+        if self.config.organism:
+            LOG.warning("  --organism %s restricts point mutations to that catalogue; "
+                        "drop it to let Hydra pick from the species call",
+                        self.config.organism)
+        LOG.warning("  databases searched: %s (see 'hydra db list')",
+                    ", ".join(self.config.databases) or "none")
 
     # ------------------------------------------------------------------ steps
     def _assemble_missing(self, assemblies: dict[str, Path], readsets: dict[str, ReadSet],

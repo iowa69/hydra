@@ -13,8 +13,10 @@ from pathlib import Path
 from . import __version__, presets
 from .config import (CELL_MODES, ELEMENT_TYPES, FORMAT_ALIASES, MATRIX_FIELDS,
                      OUTPUT_FORMATS, Config, Thresholds, default_db_dir)
+from .db.fetch import can_fetch
 from .db.manager import DatabaseStore, create_bundle, download_bundle, install_bundle
-from .db.registry import DATABASES, DB_GROUPS, protein_dir, resolve_names, spec_for
+from .db.registry import (DATABASES, DB_GROUPS, DEFAULT_DOWNLOADS, protein_dir,
+                          resolve_names, spec_for)
 from .engines.reads import ReadSet, pair_reads
 from .pipeline import Pipeline, RunOptions
 from .report.writer import write_outputs
@@ -51,6 +53,17 @@ Hydra v{__version__}
 
 
 # --------------------------------------------------------------------- helpers
+def _prepare_tmpdir(path: Path | None) -> Path | None:
+    """Create --tmpdir if it is missing, rather than failing deep inside tempfile."""
+    if path is None:
+        return None
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise HydraError(f"cannot use --tmpdir {path}: {exc}") from exc
+    return path
+
+
 def _bool_pair(group, name: str, dest: str, help_on: str, help_off: str) -> None:
     """Add matching ``--x`` / ``--no-x`` flags that default to unset."""
     group.add_argument(f"--{name}", dest=dest, action="store_true", default=None, help=help_on)
@@ -116,9 +129,10 @@ def _add_analysis(parser: argparse.ArgumentParser) -> None:
     _bool_pair(group, "auto-organism", "auto_organism",
                "detect the organism automatically (default)",
                "never infer the organism; only use --organism")
-    group.add_argument("--plus", action="store_true", default=None,
-                       help="also report stress-response and virulence elements "
-                            "from the protein reference")
+    _bool_pair(group, "plus", "plus",
+               "also report stress-response and virulence elements from the "
+               "protein reference",
+               "report acquired resistance only, even if the preset asked for --plus")
     _bool_pair(group, "mlst", "mlst", "run MLST (default)", "skip MLST")
     group.add_argument("--scheme", default=None, metavar="NAME",
                        help="force a PubMLST scheme instead of choosing automatically")
@@ -377,7 +391,7 @@ def _build_config(args, store_dir: Path) -> Config:
         auto_organism=True if args.auto_organism is None else args.auto_organism,
         plus=bool(args.plus),
         keep_temp=args.keep_temp,
-        tmp_dir=args.tmpdir,
+        tmp_dir=_prepare_tmpdir(args.tmpdir),
         report_overlaps=bool(getattr(args, "report_overlaps", False)),
     )
     return config
@@ -416,6 +430,33 @@ def _resolve_databases(args, store: DatabaseStore) -> list[str]:
     return available
 
 
+def _mutation_counts(store: DatabaseStore) -> dict[str, tuple[int, int]]:
+    """How many protein and DNA mutations each organism has catalogued.
+
+    A bare list of names does not say whether asking for an organism will do
+    anything; these counts do.
+    """
+    counts: dict[str, list[int]] = {}
+    root = protein_dir(store.root)
+    table = root / "AMRProt-mutation.tsv"
+    if table.exists():
+        with open(table, errors="replace") as handle:
+            header = handle.readline().split("\t")
+            try:
+                column = header.index("taxgroup")
+            except ValueError:
+                column = 0
+            for line in handle:
+                fields = line.split("\t")
+                if len(fields) > column:
+                    counts.setdefault(fields[column].strip(), [0, 0])[0] += 1
+    for path in sorted((store.root / "mutation" / "dna").glob("*.tsv")):
+        with open(path, errors="replace") as handle:
+            rows = sum(1 for line in handle if line.strip()) - 1
+        counts.setdefault(path.stem, [0, 0])[1] += max(rows, 0)
+    return {name: (value[0], value[1]) for name, value in counts.items()}
+
+
 def _organism_choices(store: DatabaseStore) -> list[str]:
     organisms = set(store.mutation_organisms())
     taxgroup = protein_dir(store.root) / "taxgroup.tsv"
@@ -442,7 +483,16 @@ def cmd_run(args) -> int:
             print("no organisms available; install the protein database first "
                   "(hydra db import)")
             return 1
-        print("\n".join(choices))
+        counts = _mutation_counts(store)
+        print("Catalogued point mutations per organism. "
+              "Pass one to -O/--organism.\n")
+        print(f"{'ORGANISM':34s} PROTEIN   DNA")
+        for name in choices:
+            protein, dna = counts.get(name, (0, 0))
+            print(f"{name:34s} {protein:7d}  {dna:4d}")
+        print(f"\n{len(choices)} organisms. Without -O, Hydra picks the catalogue "
+              f"from its own species call;\nan organism with no catalogued mutations "
+              f"is still screened for acquired genes.")
         return 0
 
     assemblies, readsets = collect_inputs(args)
@@ -735,7 +785,11 @@ def _download(store: DatabaseStore, args) -> int:
         print(f"installed {len(installed)} database(s): {', '.join(sorted(installed))}")
         return _print_databases(store)
 
-    names = resolve_names(args.names) if args.names else ["ncbi", "card", "vfdb", "protein"]
+    names = resolve_names(args.names) if args.names else list(DEFAULT_DOWNLOADS)
+    fetchable = [n for n in names if can_fetch(n)]
+    if fetchable and not getattr(args, "list_only", False):
+        return _fetch_databases(store, fetchable, names, args)
+
     print("Hydra does not redistribute third-party sequence data, so there are three\n"
           "ways to get the databases.\n")
     print("1. From tools already installed on this machine (quickest):")
@@ -755,6 +809,46 @@ def _download(store: DatabaseStore, args) -> int:
     print("  conda create -n hydra-db -c bioconda -c conda-forge \\\n"
           "      abricate ncbi-amrfinderplus mlst kleborate")
     print("  amrfinder -u && hydra db import")
+    return 0
+
+
+def _fetch_databases(store: DatabaseStore, fetchable: list[str], asked: list[str],
+                     args) -> int:
+    """Download and import each database that has an automatic source."""
+    force = getattr(args, "force", False)
+    manual = [n for n in asked if not can_fetch(n)]
+    done, failed, skipped = [], [], []
+    for name in fetchable:
+        if store.is_installed(name) and not force:
+            skipped.append(name)
+            continue
+        try:
+            store.download(name, force=force)
+        except HydraError as exc:
+            LOG.error("%s: %s", name, exc)
+            failed.append(name)
+            continue
+        done.append(name)
+
+    if skipped:
+        print(f"already installed, left alone: {', '.join(skipped)} (--force to replace)")
+    if done:
+        print(f"installed {len(done)} database(s): {', '.join(done)}")
+    if manual:
+        print(f"\nno automatic source for: {', '.join(manual)}")
+        print("  hydra db download --list      # where to get them by hand")
+    if not store.is_installed("pubmlst"):
+        print("\nMLST and lineage typing need pubmlst/lineage/species, which are not\n"
+              "downloaded automatically: PubMLST publishes no scheme names, and inventing\n"
+              "them would silently mis-assign schemes to species. Get them with:\n"
+              "  hydra db import                        # from tools on this machine\n"
+              "  hydra db download --from-file DB.tar.gz  # from a bundle")
+    if failed:
+        print(f"\nfailed: {', '.join(failed)}")
+        return 1
+    if done or skipped:
+        print()
+        _print_databases(store)
     return 0
 
 
@@ -906,6 +1000,9 @@ def build_parser() -> argparse.ArgumentParser:
                              help="install a bundle already on this machine")
             sub.add_argument("--url", metavar="URL",
                              help="download a bundle over HTTP(S) and install it")
+            sub.add_argument("--list", dest="list_only", action="store_true",
+                             help="only print where each database comes from, "
+                                  "downloading nothing")
             sub.add_argument("--force", action="store_true",
                              help="replace databases that are already installed")
         if action == "bundle":

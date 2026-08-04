@@ -444,6 +444,29 @@ class DatabaseStore:
                 LOG.warning("import of %s failed: %s", name, exc)
         return results
 
+    def download(self, name: str, force: bool = False, cache: Path | None = None) -> None:
+        """Fetch *name* from its upstream source and import it.
+
+        Staging happens in a temporary directory that is removed afterwards, so
+        a failed download never leaves a half-built database behind: the import
+        only runs once every file has arrived.
+        """
+        from .fetch import stage  # imported lazily: only a download needs urllib
+
+        spec = spec_for(name)
+        if self.is_installed(name) and not force:
+            LOG.info("%s is already installed", name)
+            return
+        work = Path(cache) if cache else self.root / ".download" / name
+        if work.exists():
+            shutil.rmtree(work)
+        work.mkdir(parents=True, exist_ok=True)
+        try:
+            source = stage(name, work, progress=lambda msg: LOG.debug("%s", msg))
+            self.import_one(spec, source)
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
+
     def import_one(self, spec: DbSpec, source: Path) -> None:
         LOG.info("importing %s from %s", spec.name, source)
         if spec.kind == "nucl":

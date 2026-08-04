@@ -199,6 +199,11 @@ def resolve_names(names: list[str]) -> list[str]:
     return out
 
 
+#: What "hydra db download" installs when no names are given: enough for
+#: --preset standard to run.
+DEFAULT_DOWNLOADS = ("protein", "ncbi", "card", "vfdb")
+
+
 def protein_dir(db_root: Path | str) -> Path:
     """Where the protein reference is installed under ``db_root``.
 

@@ -149,19 +149,26 @@ def tempdir(prefix: str = "hydra.", keep: bool = False, parent: str | Path | Non
 
 
 def smart_open(path: str | Path, mode: str = "rt"):
-    """Open a plain, gzip, bzip2 or xz file transparently."""
+    """Open a plain, gzip, bzip2 or xz file transparently.
+
+    Text reads replace undecodable bytes rather than raising. Sequence data is
+    ASCII, but description lines are free text and some published databases carry
+    stray bytes in them (VFDB has a non-breaking space); losing a character in a
+    product description beats aborting the run with a UnicodeDecodeError.
+    """
     name = str(path)
+    text = {"errors": "replace"} if "b" not in mode else {}
     if name.endswith(".gz"):
-        return gzip.open(name, mode)
+        return gzip.open(name, mode, **text)
     if name.endswith(".bz2"):
         import bz2  # noqa: PLC0415 - only needed for this suffix
 
-        return bz2.open(name, mode)
+        return bz2.open(name, mode, **text)
     if name.endswith(".xz"):
         import lzma  # noqa: PLC0415 - only needed for this suffix
 
-        return lzma.open(name, mode)
-    return open(name, mode)
+        return lzma.open(name, mode, **text)
+    return open(name, mode, **text)
 
 
 def is_gzip(path: str | Path) -> bool:

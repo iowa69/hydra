@@ -14,6 +14,7 @@
   <a href="#install">Install</a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="#what-hydra-does">What it does</a> ·
+  <a href="#what-the-output-looks-like">Output</a> ·
   <a href="#heteroresistance">Heteroresistance</a> ·
   <a href="#outputs">Outputs</a> ·
   <a href="#presets">Presets</a> ·
@@ -53,17 +54,26 @@ conda create -n hydra -c conda-forge -c bioconda hydra-amr
 conda activate hydra
 ```
 
-Then install the reference databases. Hydra searches the conda environments on
-the machine for reference data that is already there and converts it:
+Then get the reference databases. One command, nothing else installed, about a
+minute:
 
 ```bash
-hydra db import
-hydra db list
+hydra db download          # fetches from NCBI, CARD and VFDB and converts them
+hydra run -a isolate.fasta -o results/
 ```
 
-If nothing is found, `hydra db download` prints the upstream source and licence
-of every database, and the exact conda packages that carry them, so you can
-fetch them; `hydra db import --source DIR` then converts them.
+That covers acquired-gene screening and point mutations. MLST, lineage typing
+and species sketches are **not** downloaded automatically — PubMLST publishes no
+scheme names, and inventing them would silently mis-assign schemes to species —
+so for those, either convert copies already on the machine or install a bundle:
+
+```bash
+hydra db import                           # from reference data in conda envs
+hydra db download --from-file hydra-db.tar.gz   # from a bundle
+hydra db download --list                  # every source, licence and citation
+hydra db list                             # what is installed now
+```
+
 Databases live in `$HYDRA_DB` (default `~/.hydra/db`).
 
 <details>
@@ -97,6 +107,34 @@ hydra run -a s.fasta -1 s_R1.fq.gz -2 s_R2.fq.gz -o results/
 # single-database gene screen straight to stdout
 hydra screen -d card assemblies/*.fasta --stdout
 ```
+
+Nothing needs to be told what the organism is, which databases exist, or which
+mutations are catalogued — ask:
+
+```bash
+hydra presets                  # every preset, and what each one turns on
+hydra presets linezolid        # one preset in full
+hydra run --list-databases     # what is installed, how big, which version
+hydra run --list-organisms     # every -O value, with its mutation counts
+hydra db info card             # source, licence and citation for one database
+```
+
+`--list-organisms` prints how many protein and DNA mutations each organism has,
+so you can see whether `-O` will change anything:
+
+```
+ORGANISM                           PROTEIN   DNA
+Acinetobacter_baumannii                 51     2
+Campylobacter                           40    11
+Escherichia                            107    12
+Staphylococcus_aureus                   90     8
+```
+
+`--plus` is separate from `-O`: it widens *what kinds of element* are reported,
+adding the stress-response and virulence entries of the protein reference to the
+acquired-resistance ones. On one *K. pneumoniae* genome, `--no-plus` reports 43
+AMR elements and `--plus` reports the same 43 plus 10 STRESS. Use `--no-plus` to
+turn it back off when a preset enabled it.
 
 Inputs can be given as files, directories (scanned recursively, FASTA and FASTQ
 sorted out automatically), `--r1/--r2` pairs, or a sample sheet:
@@ -187,6 +225,102 @@ sequencing-error background, so a single mismatching read at 25× is not reporte
 as a mutation. Add `--report-synonymous` for silent changes, or
 `--no-reads-variants` / `--no-reads-mlst` to switch either off.
 
+## What the output looks like
+
+`hydra run assemblies/ -o results/ --preset surveillance` on twelve genomes
+(*E. faecium*, *E. coli*, *K. pneumoniae*, *S. aureus*) produces
+`results/hydra.html`:
+
+<p align="center">
+  <img src="docs/report.png" alt="Hydra HTML report: summary tiles, per-sample species and ST, and a clustered resistance-gene heatmap" width="100%">
+</p>
+
+The tables behind it are plain TSV. **`hydra.tsv`** is one row per detected
+element — the first columns say what was found and what it does:
+
+```
+sample    database  element_type  element_subtype  gene        class           subclass
+lzd_test  ncbi      AMR           AMR              aac(6')-Ie  AMINOGLYCOSIDE  AMIKACIN/GENTAMICIN/KANAMYCIN/TOBRAMYCIN
+lzd_test  ncbi      AMR           AMR              aacA-ENT1   AMINOGLYCOSIDE  AMINOGLYCOSIDE
+lzd_test  protein   AMR           POINT            23S         OXAZOLIDINONE   LINEZOLID
+lzd_test  protein   AMR           POINT            eat(A)      PLEUROMUTILIN   PLEUROMUTILIN
+lzd_test  vfdb      VIRULENCE     VIRULENCE        acm
+```
+
+and the later columns say where it is and how good the match was:
+
+```
+gene        sequence                             start  end    strand  coverage      coverage_pct  identity_pct  method
+aac(6')-Ie  NODE_139_length_2382_cov_14.354881   476    1915   +       1-1440/1440   100.0         99.93         BLASTN
+aacA-ENT1   NODE_4_length_114323_cov_23.284255   34146  34694  -       1-549/549     100.0         100.0         BLASTN
+23S         NODE_122_length_3396_cov_107.563423  287    3187   +       2576/2901     100.0         99.97         POINTN
+eat(A)      NODE_11_length_63020_cov_20.573360   59957  61459  -       450/501       100.0         95.61         POINTX
+acm         NODE_4_length_114323_cov_23.284255   45596  47761  -       1-2166/2166   100.0         100.0         BLASTN
+```
+
+`method` is how the call was made: `BLASTN` nucleotide, `BLASTX` translated,
+`POINTN`/`POINTX` a catalogued mutation found in DNA or protein, `POINTR` a
+mutation measured from reads. For a mutation, `coverage` is the mutation
+position within the reference (`2576/2901`), not an alignment span.
+
+### Reads: allele fractions instead of a yes/no
+
+```bash
+hydra run -1 s_R1.fq.gz -2 s_R2.fq.gz -O Staphylococcus_aureus --preset linezolid -o results/
+```
+
+```
+sample         element_subtype  gene  class          subclass   depth  allele_fraction  method
+lzd_ctrl_0.20  POINT            23S   OXAZOLIDINONE  LINEZOLID  464.0  0.2004           POINTR
+lzd_ctrl_0.05  POINT            23S   OXAZOLIDINONE  LINEZOLID  464.0  0.0453           POINTR
+```
+
+Those two rows are the synthetic controls from
+`tests/make_heteroresistance_control.py`, built to carry the 23S G2577T
+linezolid mutation in 20% and 5% of reads. An assembly of either sample calls
+the wild-type base and reports nothing; only the allele fraction shows it.
+
+### One row per sample
+
+**`hydra.summary.tsv`** — species, scheme, ST and the evidence for each:
+
+```
+sample               input_type  species               species_confidence  mlst_scheme  ST    species_evidence
+TN_VREfm_112_ST1478  assembly    Enterococcus faecium  strong              efaecium     1478  MLST scheme efaecium (6/7 exact loci)
+refs_kpn_1GR13       assembly    Klebsiella pneumoniae strong              klebsiella   147   MLST scheme klebsiella (7/7 exact loci); Mash (d=0.0054)
+```
+
+**`hydra.mlst.tsv`** — every allele, and what an incomplete call still rules out:
+
+```
+sample               scheme    ST    loci_exact  loci_total  note
+TN_VREfm_112_ST1478  efaecium  1478  6           7           pstS not found, typed as allele 0; the alleles found also fit
+                                                             ST 117, 1465, 1518, 1587, 1651..., which differ only at pstS
+```
+
+**`hydra.classes.tsv`** — how many distinct genes per drug class:
+
+```
+sample               AMINOGLYCOSIDE  BETA-LACTAM  GLYCOPEPTIDE  LINCOSAMIDE/MACROLIDE/STREPTOGRAMIN
+TN_VREfm_112_ST1478  4               1            7             1
+```
+
+**`hydra.typing.tsv`** — lineage schemes and genome-level scores:
+
+```
+sample                species                resistance_score  has_esbl  has_carbapenemase  has_colistin_resistance
+refs_kpn_1GR13        Klebsiella pneumoniae  3                 True      True               True
+refs_kpn_RHBSTW00128  Klebsiella pneumoniae  0                 False     False              False
+```
+
+**`hydra.matrix.tsv`** — the pivot the heatmaps are drawn from. `--cell` changes
+what is in each cell without changing the shape:
+
+```
+sample               aac(6')-Ie  aac(6')-Il  aacA-ENT1  aadA1  acm
+TN_VREfm_112_ST1478  1           0           1          0      1
+```
+
 ## Outputs
 
 `-o DIR` writes a set of tables named after `--prefix` (default `hydra`):
@@ -263,6 +397,16 @@ hydra db        list | import | download | bundle | info | check | remove
 hydra presets   list the available presets
 ```
 
+```
+hydra db download              fetch NCBI, CARD and VFDB from upstream and import
+hydra db download NAME...      fetch only these
+hydra db download --list       print every source, licence and citation
+hydra db download --from-file  install a prebuilt bundle
+hydra db import                convert reference data already on the machine
+hydra db bundle -o DB.tar.gz   pack what is installed, for an offline machine
+hydra db check                 verify every installed database still loads
+```
+
 <details>
 <summary><code>hydra run</code> options</summary>
 
@@ -273,7 +417,8 @@ hydra presets   list the available presets
 `virulence`, `nucl`, `core`), `--list-databases`
 
 **Analysis** — `--preset`, `-O/--organism`, `--list-organisms`,
-`--auto-organism/--no-auto-organism`, `--plus`, `--mlst/--no-mlst`, `--scheme`,
+`--auto-organism/--no-auto-organism`, `--plus/--no-plus`, `--mlst/--no-mlst`,
+`--scheme`,
 `--typing/--no-typing`, `--protein/--no-protein`,
 `--point-mutations/--no-point-mutations`,
 `--heteroresistance/--no-heteroresistance`,
@@ -394,7 +539,18 @@ python -m pytest tests/ -q
 
 `tests/make_heteroresistance_control.py` builds a synthetic positive control:
 reads simulated from a 23S reference with a defined fraction carrying a
-resistance mutation. Hydra recovers 0.20 as 0.2004 and 0.05 as 0.0453.
+resistance mutation. Hydra recovers 0.20 as 0.2004 and 0.05 as 0.0453:
+
+```bash
+python tests/make_heteroresistance_control.py 23S.fna ctrl/ \
+    --position 2577 --ref-base G --alt-base T --fraction 0.2
+hydra run -1 ctrl/*_R1.fastq.gz -2 ctrl/*_R2.fastq.gz \
+    -O Staphylococcus_aureus --preset linezolid -o ctrl-results/
+```
+
+The `-O` must match the organism the reference came from; with the wrong one the
+mutation is not in the catalogue and the run reports nothing, which Hydra warns
+about rather than writing an empty table.
 
 `tests/compare_with_reference_tools.py` reruns the concordance measurements in
 [Validation](#validation) against independent implementations, if they are

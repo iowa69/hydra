@@ -9,6 +9,8 @@ import pytest
 
 from hydra_amr.cli import collect_inputs
 from hydra_amr.db.manager import _infer_class, _normalise_gene, parse_amrprot_header
+from hydra_amr.db.fetch import (can_fetch, card_header, cge_header, ncbi_header,
+                                vfdb_header)
 from hydra_amr.db.registry import DB_GROUPS, resolve_names
 from hydra_amr.engines.blast import (Hsp, deduplicate, interval_length, merge_hsps,
                                      merge_intervals)
@@ -804,3 +806,58 @@ def test_writer_honours_every_requested_table_format(tmp_path):
     written = write_outputs(results, outdir=tmp_path, formats=["tsv", "csv", "elements"])
     names = {p.name for p in written}
     assert {"hydra.tsv", "hydra.csv", "hydra.elements.tsv"} <= names
+
+
+# ------------------------------------------------------- upstream header formats
+def test_ncbi_cds_header_conversion():
+    header = ("AAA16360.1|L11078.1|1|1|stxA2b|stxA2b|Shiga_toxin_Stx2b_subunit_A "
+              "L11078.1:177-1136")
+    assert ncbi_header(header) == "ncbi~~~stxA2b~~~L11078.1~~~L11078.1:177-1136"
+
+
+def test_ncbi_cds_header_rejects_short_records():
+    assert ncbi_header("something|else") == ""
+
+
+def test_card_header_conversion():
+    header = "gb|GQ343019.1|+|132-1023|ARO:3002999|CblA-1 [mixed culture bacterium AX_gF3SD01_15]"
+    assert card_header(header) == ("card~~~CblA-1~~~GQ343019.1~~~"
+                                   "mixed culture bacterium AX_gF3SD01_15")
+
+
+def test_cge_header_splits_from_the_right():
+    """Gene names contain underscores, so only the last two fields are structural."""
+    assert cge_header("blaNDM-19_1_MF370080", "resfinder", "beta-lactam") == \
+        "resfinder~~~blaNDM-19~~~MF370080~~~beta-lactam"
+    # PlasmidFinder separates the accession with a double underscore, so the copy
+    # number stays on the replicon name - which is how PlasmidFinder names them.
+    assert cge_header("pKPC-CAV1321_1__CP011611", "plasmidfinder", "enterobacteriales") == \
+        "plasmidfinder~~~pKPC-CAV1321_1~~~CP011611~~~enterobacteriales"
+
+
+def test_cge_header_keeps_a_descriptive_middle_field_out_of_the_gene_name():
+    assert cge_header("repUS46_1_SAP099B017(SAP099B)_GQ900449", "plasmidfinder", "gram") == \
+        "plasmidfinder~~~repUS46_1~~~GQ900449~~~gram"
+
+
+def test_resfinder_copy_suffixes_normalise_away():
+    """The copy number is cosmetic: both spellings must match the same locus."""
+    assert _normalise_gene("blaNDM-19") == _normalise_gene("blaNDM-19_1")
+
+
+def test_vfdb_header_conversion():
+    header = ("VFG037176(gb|WP_001081735) (plc1) phospholipase C "
+              "[Phospholipase C (VF0470) - Exotoxin (VFC0235)] [Acinetobacter baumannii ACICU]")
+    assert vfdb_header(header) == "vfdb~~~plc1~~~WP_001081735~~~phospholipase C"
+
+
+def test_vfdb_keeps_upstreams_accession_as_a_gene_symbol():
+    """VFDB names a record after its accession when no gene symbol is known."""
+    header = "VFG000710(gb|AAC38364) (AAC38364) Orf1 [Ler (VF0189) - Regulation (VFC0301)]"
+    assert vfdb_header(header) == "vfdb~~~AAC38364~~~AAC38364~~~Orf1"
+
+
+def test_only_databases_with_a_stable_source_are_fetchable():
+    assert can_fetch("ncbi") and can_fetch("protein") and can_fetch("vfdb")
+    # Scheme names cannot be reproduced from upstream, so this one is never guessed.
+    assert not can_fetch("pubmlst")
