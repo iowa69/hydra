@@ -49,9 +49,22 @@ one table, and adds the one thing none of those tools can do from an assembly:
 
 ## Install
 
+The Bioconda recipe is [under review](https://github.com/bioconda/bioconda-recipes/pull/67844)
+and not published yet, so `conda install hydra-amr` does not work today. Install
+the dependencies with conda and Hydra itself with pip:
+
 ```bash
-conda create -n hydra -c conda-forge -c bioconda hydra-amr
+conda create -n hydra -c conda-forge -c bioconda \
+    python=3.11 blast minimap2 samtools mash pysam pandas numpy scipy openpyxl
 conda activate hydra
+pip install https://github.com/iowa69/hydra/archive/refs/tags/v1.3.0.tar.gz
+```
+
+Once the recipe is merged this becomes a single command, and this section will
+say so rather than the other way round:
+
+```bash
+conda create -n hydra -c conda-forge -c bioconda hydra-amr   # not yet available
 ```
 
 Then get the reference databases. One command, with nothing else installed:
@@ -88,16 +101,20 @@ the download is deliberately unhurried and backs off when asked to wait. On the
 Databases live in `$HYDRA_DB` (default `~/.hydra/db`).
 
 <details>
-<summary>Install from source</summary>
+<summary>Install from a git checkout</summary>
 
 ```bash
 git clone https://github.com/iowa69/hydra && cd hydra
 conda create -n hydra -c conda-forge -c bioconda \
-    python=3.11 blast minimap2 samtools mash pysam pandas numpy scipy
+    python=3.11 blast minimap2 samtools mash pysam pandas numpy scipy openpyxl
 conda activate hydra
 pip install -e .
 ```
 </details>
+
+The external tools Hydra calls — `blastn`, `blastx`, `makeblastdb`, `minimap2`,
+`samtools` and `mash` — have to be on `$PATH`; the conda line above provides
+them. `hydra db check` reports anything missing.
 
 ## Quick start
 
