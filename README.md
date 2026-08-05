@@ -517,6 +517,84 @@ reference with a known fraction carrying `23S_G2577T`:
 
 Reproduce any of it with `tests/compare_with_reference_tools.py`.
 
+### At scale: 667 closed *Klebsiella* reference genomes
+
+The table above is 69 mixed genomes. This one is a single species in depth: **667
+closed *K. pneumoniae* complex genomes, each a finished chromosome with its
+plasmids**, screened in full detection mode (`--preset deep` — nine nucleotide
+databases, translated search, point mutations, MLST across every installed scheme,
+species and lineage typing) and compared against the same tools run on the same
+files. **667/667 completed, no failures.**
+
+| | Result |
+|---|---|
+| Sequence type vs `mlst` 2.35.0 | **666/667 (99.85%)** identical |
+| Sequence type vs Kleborate 3.2.4 | **666/667 (99.85%)** identical |
+| Virulence score vs Kleborate | **650/667 (97.45%)** identical |
+| Resistance score vs Kleborate | 548/667 (82.16%) identical |
+| Acquired AMR genes vs AMRFinderPlus 4.2.7 (same catalogue), gene-family level | **0.805** mean Jaccard |
+| Resistance point mutations vs AMRFinderPlus | **0.858** mean Jaccard — 556 shared, **1** only Hydra, 147 only AMRFinderPlus |
+| Species | all four members of the complex separated, **667/667** at "strong" confidence |
+| Sequence type assigned | 666/667, **363 distinct STs** |
+| Genomes completed | **667/667**, no failures |
+
+Every genome screened, with what was called on it, is listed in
+[`docs/validation_klebsiella_samples.tsv`](docs/validation_klebsiella_samples.tsv).
+
+The one sequence-type difference is not an error. On `ERR11578643` the comparator
+finds *rpoB* twice — `rpoB(4,4)` — and declines to call an ST at all. Both copies are
+allele 4, so the profile is unambiguous; Hydra calls ST20 from 7/7 exact loci, and
+Kleborate independently calls ST20 as well.
+
+The resistance score agrees less often than the virulence score because it is the one
+place a database difference shows through: Kleborate scores from its own curated set,
+Hydra from drug classes it carries across thirteen databases, and CARD ships no drug
+class for most of its efflux entries (see below).
+
+Where the acquired-gene calls differ, it is usually the name rather than the gene.
+Hydra reports the specific allele where AMRFinderPlus reports the generic one —
+`fosA5_fam` and `fosA9` (598 calls) against `fosA` (616), `oqxB20`/`oqxB25` against
+`oqxB`, `aac(6')-Ib'` against `aac(6')-Ib`. Gene-family agreement of 0.805 therefore
+understates it, because a suffix like `_fam` does not reduce to the bare gene.
+
+**Two things this comparison had to avoid**, both of which produce a flattering number
+that means nothing. Hydra keeps every overlapping HSP and flags the best per locus, so
+counting all rows inflates its gene set roughly sevenfold. And in `--preset deep` the
+primary flag is resolved across all thirteen databases at once, so per-database counts
+are meaningless — `resfinder` produced 136 rows and zero primaries here, because card
+and megares reached those loci first. Genes are therefore compared against
+AMRFinderPlus, which shares Hydra's catalogue and nomenclature, and per database only
+via `hydra screen -d NAME`, which runs one database the way abricate does.
+
+### What it costs
+
+Same machine, 24 cores, the same 667 genomes:
+
+| | Total | Per genome |
+|---|---|---|
+| abricate 1.4.0, nine databases | 2966 s | 4.45 s |
+| mlst 2.35.0 | 61 s | 0.09 s |
+| Kleborate 3.2.4 | 3446 s | 5.17 s |
+| AMRFinderPlus 4.2.7 | 5571 s | 8.35 s |
+| **all four together** | **12,044 s** | **18.06 s** |
+| **Hydra `--preset deep`** | **7816 s** | **11.72 s** |
+
+Hydra does the whole job in about two thirds of what the four tools cost between them,
+and adds point mutations, lineage typing and a species call to what they produce. The
+figure is if anything pessimistic: unrelated jobs held about a third of the cores
+during part of Hydra's run, and none during the comparators'.
+
+### Known gap: CARD carries no drug class for most efflux entries
+
+1693 of 6052 CARD entries reach Hydra without a drug class, and because the
+unannotated ones are largely efflux pumps and their regulators — what *Klebsiella*
+mostly carries — 81% of CARD hits here are unclassified. `hydra db download` fetches
+CARD's own FASTA, whose defline gives the organism and no drug class; CARD publishes
+class separately in its ARO ontology, which abricate's packaged copy has already
+joined. `ncbi` and `protein` come from the AMRFinderPlus catalogue and are ~100%
+annotated, so acquired resistance still reaches the class summary; CARD's efflux
+entries do not.
+
 ## How it works
 
 **Reference coverage, not query coverage.** HSPs between one contig and one
