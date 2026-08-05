@@ -566,6 +566,63 @@ and megares reached those loci first. Genes are therefore compared against
 AMRFinderPlus, which shares Hydra's catalogue and nomenclature, and per database only
 via `hydra screen -d NAME`, which runs one database the way abricate does.
 
+### One database at a time, against abricate
+
+`hydra screen -d NAME` runs a single database the way abricate does, and writes
+abricate's own column layout, so the two are directly comparable on the same 667
+genomes. Gene-family level, because where no reference matches exactly the two tools
+break the tie to different allele numbers from identical alignments.
+
+| Database | Mean Jaccard | Gene instances abricate found and Hydra did not |
+|---|---|---|
+| ecoh | **1.000** | 0 |
+| *E. coli* VF | **1.000** | 0 |
+| MEGARes | **0.988** | 37 |
+| ResFinder | **0.985** | 29 |
+| ARG-ANNOT | **0.984** | 52 |
+| PlasmidFinder | **0.939** | 0 |
+| VFDB | **0.903** | 0 |
+| CARD | 0.730 | 20 † |
+| NCBI | 0.418 | **1** ‡ |
+
+Across nine databases and 667 genomes, the total abricate found and Hydra did not is
+139 gene instances — under one per five genomes.
+
+† CARD as-is scores 0.612 with 4011 missed, and 3992 of those are six entries —
+`Klebsiella_pneumoniae_KpnH`, `acrA`, `KpnG`, `OmpK37`, `KpnF`, `KpnE` — that exist in
+abricate's packaged CARD and **not in the copy `hydra db download` fetches from CARD**.
+They are intrinsic efflux and porin genes present in ~100% of *K. pneumoniae*, so they
+separate no two isolates. Excluding them leaves 20. The two CARD snapshots differ in
+both directions; neither tool failed to detect anything.
+
+‡ NCBI scores low while missing exactly one gene in 667 genomes, which is the shape of
+a database difference rather than a detection difference: Hydra's `ncbi` is the
+AMRFinderPlus catalogue at 9712 sequences and carries arsenic, mercury and efflux
+stress entries; abricate's is 8232 and carries acquired resistance only. Every extra
+call is a gene abricate's database cannot contain.
+
+### Tuning the thresholds
+
+Thresholds only ever remove hits, and Hydra writes `%IDENTITY` and `%COVERAGE` on every
+row, so the grid is applied to one permissive run rather than re-running the pipeline
+64 times per database. Both tools are filtered at the same point — filtering one side
+only would measure the filter.
+
+| Database | Best `--min-identity` / `--min-coverage` | Jaccard | at defaults (80/60) |
+|---|---|---|---|
+| PlasmidFinder | 99 / 80 | 0.939 | 0.746 (**+0.193**) |
+| *E. coli* VF | 92.5 / 80 | 1.000 | 0.879 (**+0.121**) |
+| NCBI | 99 / 80 | 0.418 | 0.309 (+0.109) |
+| VFDB | 80 / 80 | 0.903 | 0.887 (+0.015) |
+| ResFinder | 95 / 90 | 0.985 | 0.974 (+0.010) |
+| MEGARes, ARG-ANNOT, CARD, ecoh | — | — | within 0.002 of default |
+
+There is no single best setting: the databases that gain are the ones whose entries are
+short or near-identical between alleles, where a 60% coverage floor lets a partial
+match through. `--min-coverage 80` helps almost everywhere; the identity floor is
+worth raising only for PlasmidFinder replicons and NCBI. The defaults are already at or
+near the optimum for the five databases that carry most acquired resistance.
+
 ### What it costs
 
 Same machine, 24 cores, the same 667 genomes:
