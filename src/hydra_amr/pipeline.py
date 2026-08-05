@@ -62,6 +62,42 @@ class Pipeline:
             self._species_identifier = SpeciesIdentifier(self.store)
         return self._species_identifier
 
+    # ------------------------------------------------------------------ checks
+    def _drop_unreadable(self, assemblies: dict[str, Path],
+                         results: dict[str, SampleResult]) -> dict[str, Path]:
+        """Keep the assemblies that parse; record the rest against their sample.
+
+        One unreadable file used to end the run, which on a thousand-genome batch
+        threw away every other genome for the sake of one truncated download. A
+        sample that cannot be read is not analysed -- but it is named, counted and
+        carried into the output with the reason attached, so it is never mistaken
+        for a genome that was screened and found to carry nothing.
+        """
+        usable: dict[str, Path] = {}
+        rejected: list[tuple[str, str]] = []
+        for sample, path in assemblies.items():
+            try:
+                validate_fasta(path)
+            except HydraError as exc:
+                rejected.append((sample, str(exc)))
+                results[sample].warnings.append(f"not analysed: {exc}")
+            else:
+                usable[sample] = path
+
+        if rejected:
+            # Every one of them, not just the first: a batch assembled by a script
+            # tends to fail the same way many times over, and finding that out one
+            # run at a time is what makes it expensive.
+            LOG.warning("%d of %d assemblies could not be read and were skipped:",
+                        len(rejected), len(assemblies))
+            for sample, reason in rejected:
+                LOG.warning("  %s: %s", sample, reason)
+        if not usable:
+            raise HydraError(
+                f"none of the {len(assemblies)} assemblies could be read; "
+                f"the first problem was: {rejected[0][1]}")
+        return usable
+
     # ------------------------------------------------------------------ entry
     def run(self, assemblies: dict[str, Path], readsets: dict[str, ReadSet],
             workdir: Path) -> list[SampleResult]:
@@ -97,8 +133,7 @@ class Pipeline:
         batch: QueryBatch | None = None
         if assemblies:
             LOG.info("preparing %d assemblies", len(assemblies))
-            for sample, path in assemblies.items():
-                validate_fasta(path)
+            assemblies = self._drop_unreadable(assemblies, results)
             batch = build_query_batch(assemblies, workdir / "query.fna",
                                       min_contig_length=self.options.min_contig_length)
             if batch.n_contigs == 0:

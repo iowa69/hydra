@@ -20,6 +20,7 @@ from hydra_amr.engines.nucl import build_query_batch
 from hydra_amr.engines.reads import (LocusConsensus, ReadMapper, Variant, _annotate_codons,
                                      _base_counts, _count_alt, _indel_count, _looks_like_cds,
                                      binomial_upper_tail, pair_reads)
+from hydra_amr.pipeline import Pipeline
 from hydra_amr.records import Hit, SampleResult, SpeciesCall, TypingResult
 from hydra_amr.typing.lineage import _marker_group, resistance_score, virulence_score
 from hydra_amr.typing.species import SchemeOrganism, _inherit_organism_by_species
@@ -921,3 +922,31 @@ def test_species_inheritance_does_not_guess_across_an_ambiguous_genus():
         "kother": SchemeOrganism("Klebsiella", "variicola", ""),
     })
     assert table["kother"].organism == ""
+
+
+def test_one_unreadable_assembly_does_not_discard_the_rest_of_the_batch(tmp_path):
+    """A truncated download in a thousand-genome run must not cost the other 999."""
+    good = tmp_path / "good.fasta"
+    good.write_text(">contig\nACGTACGTACGTACGT\n")
+    bad = tmp_path / "bad.fasta"
+    bad.write_text("this is not a FASTA file\n")
+
+    results = {"good": SampleResult(sample="good"), "bad": SampleResult(sample="bad")}
+    kept = Pipeline._drop_unreadable(
+        Pipeline.__new__(Pipeline), {"good": good, "bad": bad}, results)
+
+    assert set(kept) == {"good"}
+    # The skipped sample is still named and carries the reason, so it cannot be
+    # mistaken for a genome that was screened and found to carry nothing.
+    assert results["bad"].warnings
+    assert "not analysed" in results["bad"].warnings[0]
+    assert not results["good"].warnings
+
+
+def test_a_batch_of_entirely_unreadable_assemblies_is_still_an_error(tmp_path):
+    bad = tmp_path / "bad.fasta"
+    bad.write_text("not a FASTA either\n")
+    results = {"bad": SampleResult(sample="bad")}
+
+    with pytest.raises(HydraError):
+        Pipeline._drop_unreadable(Pipeline.__new__(Pipeline), {"bad": bad}, results)
