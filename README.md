@@ -41,7 +41,7 @@ one table, and adds the one thing none of those tools can do from an assembly:
 | **Translated search** | curated protein reference searched by translation, with `--plus` stress-response and virulence elements |
 | **Point mutations** | Organism-specific protein and DNA catalogues: *gyrA*, *parC*, *rpoB*, *pmrB*, 16S/23S rRNA, promoters such as `pbp4_T-266A`, and mosaic-PBP calls |
 | **Heteroresistance** | Allele fractions measured from reads at every catalogued position, with an estimate of how many rRNA operons carry the mutation |
-| **MLST** | All 167 installed PubMLST schemes searched at once; the scheme is chosen automatically, no `--species` needed |
+| **MLST** | Every installed PubMLST scheme searched at once (153 as of August 2026; PubMLST adds and retires them, so `hydra db info pubmlst` is the count that matters); the scheme is chosen automatically, no `--species` needed |
 | **Species** | Mash sketches and the MLST result combined — the sketch also runs on raw reads, so a FASTQ-only sample still gets an organism |
 | **Lineage typing** | Yersiniabactin, colibactin, aerobactin, salmochelin and *rmp* sublineages, *wzi*, *E. coli* serotyping (`O121:H7`), pathovar markers and the Achtman/Pasteur/Lee MLST schemes |
 | **Scores** | a 0–5 virulence score from the siderophore and *rmp* loci, and a 0–3 resistance score generalised to any Gram-negative via drug-class annotation |
@@ -55,7 +55,7 @@ the dependencies with conda and Hydra itself with pip:
 
 ```bash
 conda create -n hydra -c conda-forge -c bioconda \
-    python=3.11 blast minimap2 samtools mash pysam pandas numpy scipy openpyxl
+    python=3.11 pip blast minimap2 samtools mash pysam pandas numpy scipy openpyxl
 conda activate hydra
 pip install https://github.com/iowa69/hydra/archive/refs/tags/v1.3.0.tar.gz
 ```
@@ -106,7 +106,7 @@ Databases live in `$HYDRA_DB` (default `~/.hydra/db`).
 ```bash
 git clone https://github.com/iowa69/hydra && cd hydra
 conda create -n hydra -c conda-forge -c bioconda \
-    python=3.11 blast minimap2 samtools mash pysam pandas numpy scipy openpyxl
+    python=3.11 pip blast minimap2 samtools mash pysam pandas numpy scipy openpyxl
 conda activate hydra
 pip install -e .
 ```
@@ -480,7 +480,7 @@ BLAST can spread a closed chromosome across all cores. On 24 cores:
 | 1.5 Gbp of paired reads, gene calls + 23S allele fractions | **9 s** | — |
 
 The full pipeline means two nucleotide databases, translated search, protein and
-DNA point mutations, MLST across all 167 schemes, species identification and
+DNA point mutations, MLST across every installed scheme, species identification and
 lineage typing.
 
 ## Validation

@@ -504,6 +504,26 @@ def cmd_run(args) -> int:
     databases = _resolve_databases(args, store)
     formats = _resolve_formats(args)
 
+    # Argument-only checks come first: they need nothing but the command line, so
+    # failing them here reports the mistake before any startup noise.
+    element_types = None
+    if args.element_types:
+        element_types = [t.strip().upper() for t in args.element_types.split(",") if t.strip()]
+        unknown = [t for t in element_types if t not in ELEMENT_TYPES]
+        if unknown:
+            raise HydraError(f"unknown --element-types {', '.join(unknown)}; choose from "
+                             f"{', '.join(ELEMENT_TYPES)}")
+    if not args.stdout and args.outdir is None:
+        raise HydraError("no output directory set; pass --outdir, or --stdout to write the "
+                         "long table to standard output")
+    if any(sep in args.prefix for sep in ("/", os.sep)):
+        raise HydraError(f"--prefix is a file basename, not a path (got '{args.prefix}')")
+    if "xlsx" in formats and importlib.util.find_spec("openpyxl") is None:
+        # Checked before the analysis runs: discovering it afterwards throws
+        # away the whole run.
+        raise HydraError("xlsx output needs openpyxl.\n"
+                         "  conda install -c conda-forge openpyxl")
+
     if args.organism:
         choices = _organism_choices(store)
         if choices and args.organism not in choices:
@@ -545,27 +565,9 @@ def cmd_run(args) -> int:
     LOG.info("Hydra v%s | %d assemblies, %d read sets | databases: %s | %d threads",
              __version__, len(assemblies), len(readsets), ", ".join(databases), config.threads)
 
-    element_types = None
-    if args.element_types:
-        element_types = [t.strip().upper() for t in args.element_types.split(",") if t.strip()]
-        unknown = [t for t in element_types if t not in ELEMENT_TYPES]
-        if unknown:
-            raise HydraError(f"unknown --element-types {', '.join(unknown)}; choose from "
-                             f"{', '.join(ELEMENT_TYPES)}")
     if args.cell in ("depth", "fraction") and not readsets:
         LOG.warning("--cell %s only has values for read-derived hits, and this run has no "
                     "read input; the matrix will be empty", args.cell)
-
-    if not args.stdout and args.outdir is None:
-        raise HydraError("no output directory set; pass --outdir, or --stdout to write the "
-                         "long table to standard output")
-    if any(sep in args.prefix for sep in ("/", os.sep)):
-        raise HydraError(f"--prefix is a file basename, not a path (got '{args.prefix}')")
-    if "xlsx" in formats and importlib.util.find_spec("openpyxl") is None:
-        # Checked before the analysis runs: discovering it afterwards throws
-        # away the whole run.
-        raise HydraError("xlsx output needs openpyxl.\n"
-                         "  conda install -c conda-forge openpyxl")
 
     command = "hydra " + " ".join(shlex.quote(a) for a in sys.argv[1:])
     with tempdir(prefix="hydra.", keep=config.keep_temp, parent=config.tmp_dir) as workdir:
@@ -967,7 +969,9 @@ def build_parser() -> argparse.ArgumentParser:
     screen_parser = subparsers.add_parser(
         "screen", help="acquired-gene screening only, as a flat gene table",
         description="Screen assemblies against nucleotide gene databases. "
-                    "No typing, no point mutations.",
+                    "Typing and point mutations are off by default here, but the "
+                    "flags still work: --mlst or --point-mutations turns one back "
+                    "on for a single run.",
         formatter_class=argparse.RawDescriptionHelpFormatter)
     _add_inputs(screen_parser)
     _add_databases(screen_parser)

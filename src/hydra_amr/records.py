@@ -166,6 +166,10 @@ class SampleResult:
     scores: dict[str, Any] = field(default_factory=dict)
     qc: dict[str, Any] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
+    #: Wall-clock of the whole run this sample belonged to, not this sample's own
+    #: cost. Assemblies are screened as one batch -- a single BLAST pass per
+    #: database over every contig -- so there is no per-sample time to report, and
+    #: dividing the total by the sample count would invent one.
     runtime_seconds: float = 0.0
 
     def hits_of(self, element_type: str, primary_only: bool = True) -> list[Hit]:
