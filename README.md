@@ -667,6 +667,31 @@ carbapenemase-positive — so this arm tests depth on one lineage rather than br
 Hydra also called one isolate *Escherichia coli* and one "unknown" in a collection
 labelled entirely *Klebsiella*.
 
+### 2933 public genomes, with the sequence type known in advance
+
+The third arm is the one with an answer key. Each genome is a published *Klebsiella*
+chromosome whose sequence type was recorded independently, and each was rebuilt into a
+whole genome first: the chromosome re-joined with its own plasmids, matched on the
+strain name in the NCBI defline — 31,189 plasmids returned to 2705 of the 2933
+chromosomes. Without that step the arm would be chromosome-only, and most acquired
+resistance in *Klebsiella* travels on a plasmid.
+
+| | Result |
+|---|---|
+| Sequence type vs the recorded ST | **2933/2933 (100.00%)** |
+| Sequence type assigned | **2933/2933**, 539 distinct STs |
+| Species | 2915 *K. pneumoniae*, 15 *variicola*, 3 *quasipneumoniae* |
+| Genomes completed | **2933/2933**, no failures, 10.8 s a genome |
+
+539 sequence types is the breadth this arm was for, against 363 on the closed
+references and 41 on the clinical collection. The commonest are the global
+carbapenem-resistant lineages — ST11 (588), ST258 (187), ST15 (144), ST307 (128) — and
+ST23 (107), the hypervirulent one. 128 genomes score 5 for virulence, carrying
+yersiniabactin, colibactin and aerobactin together.
+
+Median plasmid replicons is 4 here against 2 on the closed references, which is the
+plasmid re-joining showing up in the calls rather than in the input.
+
 ### Genotype against measured phenotype
 
 Agreement between tools says who resembles whom, not who is right. 871 of these
