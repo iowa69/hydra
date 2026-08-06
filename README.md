@@ -641,6 +641,68 @@ and adds point mutations, lineage typing and a species call to what they produce
 figure is if anything pessimistic: unrelated jobs held about a third of the cores
 during part of Hydra's run, and none during the comparators'.
 
+### 1279 clinical isolates
+
+A second arm, drawn from a hospital carbapenem-resistant *K. pneumoniae* collection —
+draft assemblies rather than finished genomes, which is what most people actually
+have. **1279/1279 completed, 9.7 s a genome.**
+
+| | Result |
+|---|---|
+| Sequence type vs `mlst` 2.35.0 | **1278/1279 (99.92%)**; of those both tools typed, **1239/1239 (100%)** |
+| Virulence score vs Kleborate 3.2.4 | **1277/1278 (99.92%)** |
+| Sequence type vs Kleborate | 1238/1278 (96.87%) |
+| Resistance score vs Kleborate | 1122/1278 (87.79%) |
+| Acquired AMR genes vs AMRFinderPlus | 0.652 mean Jaccard |
+| Point mutations vs AMRFinderPlus | 2641 shared, **6** only Hydra, 1577 only AMRFinderPlus |
+
+Point-mutation agreement is worse here than on finished genomes (0.68 against 0.86),
+in one direction: AMRFinderPlus reports 1577 that Hydra does not, Hydra 6 that
+AMRFinderPlus does not. These are draft assemblies, and a mutation whose locus falls
+across a contig break is one Hydra's alignment declines to call. It is the same
+conservatism that makes it right on closed genomes, and on drafts it costs recall.
+
+The collection is clonal — 41 distinct STs across 1279 isolates, 1265 of them
+carbapenemase-positive — so this arm tests depth on one lineage rather than breadth.
+Hydra also called one isolate *Escherichia coli* and one "unknown" in a collection
+labelled entirely *Klebsiella*.
+
+### Genotype against measured phenotype
+
+Agreement between tools says who resembles whom, not who is right. 871 of these
+isolates carry a laboratory EUCAST S/I/R result, so every tool can be scored against
+the same measurements. Each is asked the same question using **its own drug annotation**
+— a hand-written gene list would encode our judgement and flatter whichever tool
+shared it. Intermediates are excluded.
+
+Two drugs had to be dropped: 755 of 773 isolates are meropenem-resistant and 832 of
+838 ciprofloxacin-resistant, so "call everything resistant" scores a perfect
+sensitivity and a zero specificity, and every tool lands on 0.5 whatever it reports.
+Six drugs remain where the smaller class is at least a tenth of the data.
+
+| Tool | Mean balanced accuracy | Very major errors | Major errors |
+|---|---|---|---|
+| AMRFinderPlus 4.2.7 | **0.611** | 284 | 862 |
+| abricate 1.4.0 (ncbi) | 0.588 | 528 | 782 |
+| **Hydra** | 0.580 | **153** | 1236 |
+| Kleborate 3.2.4 | 0.573 | 863 | 905 |
+| abricate (resfinder) | 0.564 | 744 | 778 |
+
+**Hydra does not win on balanced accuracy here.** AMRFinderPlus is ahead, and Hydra is
+third of five. What Hydra has is the fewest very major errors of any tool — 153 against
+284 for the next best and 863 for Kleborate — bought with the most major errors. It
+sits at a deliberately sensitive operating point: it rarely calls a resistant isolate
+susceptible, and often calls a susceptible one resistant. Which of those two errors
+matters more is a decision about the use, not a property of the tool, and the table
+gives both rather than a single number that hides the trade.
+
+Read the absolute values with care. Every tool scores between 0.56 and 0.61, because
+predicting a phenotype from gene presence is genuinely hard: aminoglycoside genes are
+near-universal in this collection, *fosA* is intrinsic to the species so genotype
+predicts resistance for all of it, and tigecycline resistance is efflux-regulatory and
+rarely an acquired gene at all. None of these tools was built to be an MIC predictor,
+and none of them is one.
+
 ### Known gap: CARD carries no drug class for most efflux entries
 
 1693 of 6052 CARD entries reach Hydra without a drug class, and because the
