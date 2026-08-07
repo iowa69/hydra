@@ -679,9 +679,23 @@ resistance in *Klebsiella* travels on a plasmid.
 | | Result |
 |---|---|
 | Sequence type vs the recorded ST | **2933/2933 (100.00%)** |
+| Sequence type vs Kleborate 3.2.4 | **2933/2933 (100.00%)** |
+| Sequence type vs `mlst` 2.35.0 | 2931/2933 (99.93%); of those it typed, **2931/2931 (100%)** |
+| Virulence score vs Kleborate | **2917/2933 (99.45%)** |
+| Resistance score vs Kleborate | 2453/2933 (83.63%) |
+| Acquired AMR genes vs AMRFinderPlus | 0.719 mean Jaccard |
+| Point mutations vs AMRFinderPlus | 4269 shared, **17** only Hydra, 2156 only AMRFinderPlus |
 | Sequence type assigned | **2933/2933**, 539 distinct STs |
 | Species | 2915 *K. pneumoniae*, 15 *variicola*, 3 *quasipneumoniae* |
 | Genomes completed | **2933/2933**, no failures, 10.8 s a genome |
+
+The two genomes `mlst` and Hydra disagree on are the same case as on the closed
+references, and here the answer key settles it. On `CP110566` the comparator finds
+`gapA(51,51)` and on `CP152714` `rpoB(4,4)` — a duplicated locus — and calls no ST at
+all. Both copies are the same allele in both genomes, so the profile is unambiguous.
+Hydra calls ST491 and ST20, which are the sequence types recorded for those genomes.
+Three arms, three instances, same cause, and independent truth agreeing with Hydra
+each time.
 
 539 sequence types is the breadth this arm was for, against 363 on the closed
 references and 41 on the clinical collection. The commonest are the global

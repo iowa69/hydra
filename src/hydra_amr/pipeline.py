@@ -98,6 +98,47 @@ class Pipeline:
                 f"the first problem was: {rejected[0][1]}")
         return usable
 
+    def _drop_unreadable_reads(self, readsets: dict[str, ReadSet],
+                               results: dict[str, SampleResult],
+                               assemblies: dict[str, Path]) -> dict[str, ReadSet]:
+        """Keep the read sets that open; record the rest against their sample.
+
+        The assembly path already survives one bad file. This is the same rule for
+        reads, and it exists because the run that validated it hit exactly this: one
+        FASTQ in a 508-file collection had been truncated to zero bytes in 2020, and
+        it ended a batch of 25 samples that had nothing wrong with them.
+
+        A sample whose reads are unusable but whose assembly is fine is still
+        analysed from the assembly. It loses the read-derived calls -- allele
+        fractions, heteroresistance -- so the warning says which half is missing
+        rather than letting the output imply both were looked at.
+        """
+        usable: dict[str, ReadSet] = {}
+        rejected: list[tuple[str, str]] = []
+        for sample, readset in readsets.items():
+            try:
+                for path in readset.files:
+                    validate_fastq(path)
+            except HydraError as exc:
+                rejected.append((sample, str(exc)))
+                kept = " ; the assembly was still screened" if sample in assemblies else ""
+                results[sample].warnings.append(f"reads not analysed: {exc}{kept}")
+                if sample in assemblies:
+                    results[sample].input_type = "assembly"
+            else:
+                usable[sample] = readset
+
+        if rejected:
+            LOG.warning("%d of %d read sets could not be read and were skipped:",
+                        len(rejected), len(readsets))
+            for sample, reason in rejected:
+                LOG.warning("  %s: %s", sample, reason)
+        if readsets and not usable and not assemblies:
+            raise HydraError(
+                f"none of the {len(readsets)} read sets could be read; "
+                f"the first problem was: {rejected[0][1]}")
+        return usable
+
     # ------------------------------------------------------------------ entry
     def run(self, assemblies: dict[str, Path], readsets: dict[str, ReadSet],
             workdir: Path) -> list[SampleResult]:
@@ -125,9 +166,7 @@ class Pipeline:
                 inputs.extend(str(p) for p in readsets[sample].files)
             results[sample] = SampleResult(sample=sample, input_type=kind, inputs=inputs)
 
-        for readset in readsets.values():
-            for path in readset.files:
-                validate_fastq(path)
+        readsets = self._drop_unreadable_reads(readsets, results, assemblies)
 
         organism_by_sample: dict[str, str | None] = {}
         batch: QueryBatch | None = None

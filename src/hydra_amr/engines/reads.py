@@ -53,8 +53,24 @@ INDEL_EVIDENCE_FRACTION = 0.15
 #: majority; several such positions in one locus mean a mixed sample.
 MIXED_ALLELE_RANGE = (0.20, 0.80)
 
+#: A reference is only multi-copy if it is an rRNA locus. The DNA catalogue also
+#: holds single-copy references -- Klebsiella's only entry is the blaSHV promoter --
+#: and an allele fraction there means a mixed population, not a count of operons.
+_RRNA_REFERENCE = re.compile(r"(?:^|[^A-Za-z0-9])(?:23S|16S|5S)(?:[^A-Za-z0-9]|$)"
+                             r"|ribosomal[_ ]?RNA|rRNA", re.IGNORECASE)
+
+
+def is_multicopy_rrna(reference: str) -> bool:
+    """True when a mutation reference names an rRNA locus, which is multi-copy.
+
+    Reference headers look like ``ACC@23S_ribosomal_RNA@23S:start-stop`` for rRNA and
+    ``ACC@blaSHV_promoter_region@blaSHV:start-stop`` for everything else.
+    """
+    return bool(_RRNA_REFERENCE.search(reference or ""))
+
+
 #: rRNA operon copy numbers, used to translate an allele fraction into an
-#: estimated number of mutated operons.
+#: estimated number of mutated operons. Only meaningful for rRNA references.
 RRNA_OPERON_COUNTS: dict[str, int] = {
     "Staphylococcus_aureus": 5,
     "Enterococcus_faecalis": 4,
@@ -693,7 +709,11 @@ class ReadMapper:
                             status = "absent"
                         p_value = binomial_upper_tail(alt_count, depth, BACKGROUND_ERROR_RATE) \
                             if depth else 1.0
-                        if operons and status in ("fixed", "heteroresistant"):
+                        # Only rRNA loci are multi-copy. Estimating "0.4 of 8
+                        # operons" for a blaSHV promoter mutation reads as a copy
+                        # count for a gene that has one copy.
+                        if (operons and status in ("fixed", "heteroresistant")
+                                and is_multicopy_rrna(reference)):
                             estimated = fraction * operons
                         else:
                             estimated = None

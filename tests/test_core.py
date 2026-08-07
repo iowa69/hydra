@@ -17,7 +17,8 @@ from hydra_amr.engines.blast import (Hsp, deduplicate, interval_length, merge_hs
 from hydra_amr.engines.mutations import (AlignedObservation, MutationEntry, _parse_symbol,
                                          evaluate, reference_index, walk_alignment)
 from hydra_amr.engines.nucl import build_query_batch
-from hydra_amr.engines.reads import (LocusConsensus, ReadMapper, Variant, _annotate_codons,
+from hydra_amr.engines.reads import (LocusConsensus, ReadMapper, ReadSet, Variant, _annotate_codons,
+                                     is_multicopy_rrna,
                                      _base_counts, _count_alt, _indel_count, _looks_like_cds,
                                      binomial_upper_tail, pair_reads)
 from hydra_amr.pipeline import Pipeline
@@ -950,3 +951,49 @@ def test_a_batch_of_entirely_unreadable_assemblies_is_still_an_error(tmp_path):
 
     with pytest.raises(HydraError):
         Pipeline._drop_unreadable(Pipeline.__new__(Pipeline), {"bad": bad}, results)
+
+
+def test_one_unreadable_read_set_does_not_discard_the_batch(tmp_path):
+    """The case that ended a 25-sample batch: one FASTQ truncated to zero bytes."""
+    good_r1 = tmp_path / "good_R1.fastq.gz"
+    good_r1.write_bytes(b"")           # contents are not read here, only validated
+    bad_r1 = tmp_path / "bad_R1.fastq.gz"
+    bad_r1.write_bytes(b"")
+    asm = tmp_path / "bad.fasta"
+    asm.write_text(">c\nACGT\n")
+
+    results = {"good": SampleResult(sample="good"), "bad": SampleResult(sample="bad")}
+    readsets = {
+        "good": ReadSet(sample="good", r1=good_r1, single=True),
+        "bad": ReadSet(sample="bad", r1=bad_r1, single=True),
+    }
+
+    def only_bad_fails(path):
+        if path == bad_r1:
+            raise HydraError(f"input file is empty: {path}")
+
+    pipeline = Pipeline.__new__(Pipeline)
+    import hydra_amr.pipeline as mod
+    original = mod.validate_fastq
+    mod.validate_fastq = only_bad_fails
+    try:
+        kept = pipeline._drop_unreadable_reads(readsets, results, {"bad": asm})
+    finally:
+        mod.validate_fastq = original
+
+    assert set(kept) == {"good"}
+    assert results["bad"].warnings and "reads not analysed" in results["bad"].warnings[0]
+    # The assembly is still usable, so the sample is not lost -- only its read half.
+    assert "the assembly was still screened" in results["bad"].warnings[0]
+    assert results["bad"].input_type == "assembly"
+    assert not results["good"].warnings
+
+
+def test_operon_estimate_only_applies_to_rrna_references():
+    """An allele fraction on a single-copy gene is a mixed population, not operons."""
+    assert is_multicopy_rrna("NZ_CP009828.1@23S_ribosomal_RNA@23S:497114-500039")
+    assert is_multicopy_rrna("ACC@16S_rRNA@16S:1-1500")
+    # Klebsiella's only catalogued DNA reference, and it has one copy.
+    assert not is_multicopy_rrna("NZ_CP054063.1@blaSHV_promoter_region@blaSHV:2645215-2645514")
+    assert not is_multicopy_rrna("ACC@pbp4_promoter@pbp4:1-300")
+    assert not is_multicopy_rrna("")
