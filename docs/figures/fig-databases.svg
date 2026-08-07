@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="332" viewBox="0 0 760 332" role="img" aria-label="Gene calls against abricate 1.4.0">
+
+  <style>
+    .bg   { fill: #ffffff; }
+    .ttl  { fill: #0f172a; font: 600 15px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .sub  { fill: #64748b; font: 400 12px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .lbl  { fill: #334155; font: 400 12.5px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .val  { fill: #0f172a; font: 600 12.5px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .tick { stroke: #e2e8f0; stroke-width: 1; }
+    @media (prefers-color-scheme: dark) {
+      .bg   { fill: #0d1117; }
+      .ttl  { fill: #e6edf3; }
+      .sub  { fill: #8b949e; }
+      .lbl  { fill: #c9d1d9; }
+      .val  { fill: #e6edf3; }
+      .tick { stroke: #21262d; }
+    }
+  </style>
+
+<rect class="bg" width="760" height="332" rx="8"/>
+<text class="ttl" x="24" y="30">Gene calls against abricate 1.4.0</text>
+<text class="sub" x="24" y="49">same database, same 667 genomes, one database per run - mean Jaccard</text>
+<text class="lbl" x="24" y="87">ecoh</text>
+<rect x="174" y="75" width="460.0" height="16" rx="3" fill="#3b82f6" opacity="0.95"/>
+<text class="val" x="644.0" y="88">1.000</text>
+<text class="lbl" x="24" y="121">E. coli VF</text>
+<rect x="174" y="109" width="460.0" height="16" rx="3" fill="#3b82f6" opacity="0.72"/>
+<text class="val" x="644.0" y="122">1.000</text>
+<text class="lbl" x="24" y="155">MEGARes</text>
+<rect x="174" y="143" width="454.5" height="16" rx="3" fill="#3b82f6" opacity="0.72"/>
+<text class="val" x="638.5" y="156">0.988</text>
+<text class="lbl" x="24" y="189">ResFinder</text>
+<rect x="174" y="177" width="453.1" height="16" rx="3" fill="#3b82f6" opacity="0.72"/>
+<text class="val" x="637.1" y="190">0.985</text>
+<text class="lbl" x="24" y="223">ARG-ANNOT</text>
+<rect x="174" y="211" width="452.6" height="16" rx="3" fill="#3b82f6" opacity="0.72"/>
+<text class="val" x="636.6" y="224">0.984</text>
+<text class="lbl" x="24" y="257">PlasmidFinder</text>
+<rect x="174" y="245" width="431.9" height="16" rx="3" fill="#3b82f6" opacity="0.72"/>
+<text class="val" x="615.9" y="258">0.939</text>
+<text class="lbl" x="24" y="291">VFDB</text>
+<rect x="174" y="279" width="415.4" height="16" rx="3" fill="#3b82f6" opacity="0.72"/>
+<text class="val" x="599.4" y="292">0.903</text>
+</svg>

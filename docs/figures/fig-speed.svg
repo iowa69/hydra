@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="178" viewBox="0 0 760 178" role="img" aria-label="One pass instead of four">
+
+  <style>
+    .bg   { fill: #ffffff; }
+    .ttl  { fill: #0f172a; font: 600 15px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .sub  { fill: #64748b; font: 400 12px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .lbl  { fill: #334155; font: 400 12.5px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .val  { fill: #0f172a; font: 600 12.5px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .tick { stroke: #e2e8f0; stroke-width: 1; }
+    @media (prefers-color-scheme: dark) {
+      .bg   { fill: #0d1117; }
+      .ttl  { fill: #e6edf3; }
+      .sub  { fill: #8b949e; }
+      .lbl  { fill: #c9d1d9; }
+      .val  { fill: #e6edf3; }
+      .tick { stroke: #21262d; }
+    }
+  </style>
+
+<rect class="bg" width="760" height="178" rx="8"/>
+<text class="ttl" x="24" y="30">One pass instead of four</text>
+<text class="sub" x="24" y="49">667 closed genomes, 24 cores, same machine</text>
+<rect x="24.0" y="78" width="329.2" height="26" fill="#3b82f6" opacity="0.85"/>
+<text class="val" x="188.6" y="95" text-anchor="middle" style="font-size:11px">AMRFinderPlus 8.4 s</text>
+<rect x="353.2" y="78" width="203.8" height="26" fill="#14b8a6" opacity="0.85"/>
+<text class="val" x="455.1" y="95" text-anchor="middle" style="font-size:11px">Kleborate 5.2 s</text>
+<rect x="557.0" y="78" width="175.4" height="26" fill="#f59e0b" opacity="0.85"/>
+<text class="val" x="644.7" y="95" text-anchor="middle" style="font-size:11px">abricate x9 4.5 s</text>
+<rect x="732.5" y="78" width="3.5" height="26" fill="#94a3b8" opacity="0.85"/>
+<text class="lbl" x="24" y="72">Four tools, run separately</text>
+<text class="val" x="736" y="72" text-anchor="end">18.1 s / genome</text>
+<text class="lbl" x="24" y="136">Hydra --preset deep, everything at once</text>
+<rect x="24" y="142" width="462.1" height="26" rx="2" fill="#14b8a6"/>
+<text class="val" x="736" y="136" text-anchor="end">11.7 s / genome</text>
+</svg>
