@@ -22,9 +22,10 @@ from hydra_amr.engines.reads import (LocusConsensus, ReadMapper, ReadSet, Varian
                                      _base_counts, _count_alt, _indel_count, _looks_like_cds,
                                      binomial_upper_tail, pair_reads)
 from hydra_amr.pipeline import Pipeline
-from hydra_amr.records import Hit, SampleResult, SpeciesCall, TypingResult
+from hydra_amr.records import Hit, MlstCall, SampleResult, SpeciesCall, TypingResult
 from hydra_amr.typing.lineage import _marker_group, resistance_score, virulence_score
-from hydra_amr.typing.species import SchemeOrganism, _inherit_organism_by_species
+from hydra_amr.typing.species import (SchemeOrganism, SpeciesIdentifier,
+                                      _inherit_organism_by_species)
 from hydra_amr.typing.mlst import MlstTyper, SchemeProfiles
 from hydra_amr.report.html import _format_cell
 from hydra_amr.report.tables import (GENE_COLUMNS, _coverage_glyph, class_summary,
@@ -997,3 +998,41 @@ def test_operon_estimate_only_applies_to_rrna_references():
     assert not is_multicopy_rrna("NZ_CP054063.1@blaSHV_promoter_region@blaSHV:2645215-2645514")
     assert not is_multicopy_rrna("ACC@pbp4_promoter@pbp4:1-300")
     assert not is_multicopy_rrna("")
+
+
+def test_genus_disagreement_is_not_a_strong_species_call():
+    """A scheme and a sketch naming different genera cannot both be strong evidence.
+
+    The real case: an isolate matched the EnteroBase E. coli scheme at 8/8 exact
+    loci while its sketch said Klebsiella pneumoniae at d=0.0210 -- a thousandth
+    outside the override threshold -- and was reported as E. coli, confidently.
+    """
+    identifier = SpeciesIdentifier.__new__(SpeciesIdentifier)
+    identifier.scheme_table = {
+        "ecoli": SchemeOrganism("Escherichia", "coli", "Escherichia"),
+    }
+    identifier.sketches = []
+    mlst = MlstCall(scheme="ecoli", sequence_type="43", loci_found=8, loci_total=8)
+    sketch = SpeciesCall(name="Klebsiella pneumoniae", genus="Klebsiella",
+                         species="pneumoniae", confidence="good", distance=0.0210)
+
+    call = identifier.identify("s", mlst, assembly=None, sketch=sketch)
+
+    assert call.confidence == "weak"
+    assert "genus disagreement" in call.evidence
+
+
+def test_agreeing_scheme_and_sketch_stay_strong():
+    identifier = SpeciesIdentifier.__new__(SpeciesIdentifier)
+    identifier.scheme_table = {
+        "klebsiella": SchemeOrganism("Klebsiella", "pneumoniae", "Klebsiella_pneumoniae"),
+    }
+    identifier.sketches = []
+    mlst = MlstCall(scheme="klebsiella", sequence_type="101", loci_found=7, loci_total=7)
+    sketch = SpeciesCall(name="Klebsiella pneumoniae", genus="Klebsiella",
+                         species="pneumoniae", confidence="strong", distance=0.0036)
+
+    call = identifier.identify("s", mlst, assembly=None, sketch=sketch)
+
+    assert call.confidence == "strong"
+    assert "genus disagreement" not in call.evidence

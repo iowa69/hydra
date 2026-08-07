@@ -517,10 +517,42 @@ reference with a known fraction carrying `23S_G2577T`:
 
 Reproduce any of it with `tests/compare_with_reference_tools.py`.
 
-### At scale: 667 closed *Klebsiella* reference genomes
+### At scale: 5375 *Klebsiella* samples
 
-The table above is 69 mixed genomes. This one is a single species in depth: **667
-closed *K. pneumoniae* complex genomes, each a finished chromosome with its
+The table above is 69 mixed genomes. What follows is a single species in depth —
+every *Klebsiella* genome and read set on one machine, screened in full detection
+mode and compared against the tools people already run, on the same files.
+
+| Arm | Samples | What they are | Completed |
+|---|---|---|---|
+| A | 667 | closed reference genomes, chromosome **and** plasmids | 667/667 |
+| B | 1279 | clinical draft assemblies, 871 with measured EUCAST phenotype | 1279/1279 |
+| C | 2933 | published genomes with the sequence type known in advance | 2933/2933 |
+| D | 496 | clinical isolates with assembly **and** paired reads | 496/496 |
+| | **5375** | | **no failures** |
+
+Every sample, with what was called on it, is listed in
+[`docs/validation_klebsiella_samples.tsv`](docs/validation_klebsiella_samples.tsv).
+
+Headline, across the arms that carry independent truth: **2933/2933 sequence types
+correct against a recorded answer key**, **666/667, 1278/1279 and 2931/2933 against
+`mlst`**, and the whole pipeline at **11.7 s a genome against 18.1 s for the four
+reference tools combined**.
+
+Those four sequence-type differences are worth naming individually rather than
+rounding away, because they do not all point the same way. Three are genomes `mlst`
+declined to type at all because a locus appeared twice — `gapA(51,51)`, `rpoB(4,4)` —
+where both copies are the same allele and the profile is unambiguous; Hydra typed each
+correctly, confirmed by Kleborate and, on arm C, by the recorded ST. **The fourth is
+Hydra getting it wrong**: `KP79_ST512-1LV` matched the EnteroBase *E. coli* scheme at
+8/8 exact loci, and Hydra reported *Escherichia coli* for a *Klebsiella* isolate. See
+[below](#known-gap-a-scheme-can-outvote-the-species-sketch).
+
+Where Hydra does not lead — genotype-to-phenotype accuracy — the table below says so.
+
+#### 667 closed reference genomes
+
+**667 closed *K. pneumoniae* complex genomes, each a finished chromosome with its
 plasmids**, screened in full detection mode (`--preset deep` — nine nucleotide
 databases, translated search, point mutations, MLST across every installed scheme,
 species and lineage typing) and compared against the same tools run on the same
@@ -741,6 +773,63 @@ near-universal in this collection, *fosA* is intrinsic to the species so genotyp
 predicts resistance for all of it, and tigecycline resistance is efflux-regulatory and
 rarely an acquired gene at all. None of these tools was built to be an MIC predictor,
 and none of them is one.
+
+### 496 isolates with assembly and reads together
+
+The last arm is the one the other tools cannot be compared on, because they read
+assemblies only. 496 clinical isolates were screened with their assembly *and* their
+paired reads, which is what makes allele fractions available at all.
+
+| | Result |
+|---|---|
+| Samples completed | **496/496** (495 assembly+reads, 1 assembly-only — see below) |
+| Sequence type vs the same isolates screened from the assembly alone | **496/496 identical** |
+| Read-derived variants in resistance genes | 675,202 across 495 samples |
+| Point mutations | 970 across 435 samples |
+| Catalogued heteroresistance calls | **4** |
+
+Adding reads never changed a sequence type. That is the result to want from this arm:
+the read path is additional evidence, not a second opinion that quietly disagrees with
+the first.
+
+**Four heteroresistance calls, not 675,202.** The read pass annotates every
+intermediate-frequency variant it sees with its allele fraction, and most of those are
+a gene differing from its closest reference at 3-5% — sequencing noise or a mixed
+culture, not resistance. A heteroresistance call means a *catalogued* resistance
+mutation at intermediate frequency, and across 496 *Klebsiella* isolates there were
+four, all `blaSHV_C-112A`. That is a property of the catalogue rather than of the
+method: *Klebsiella* has exactly one catalogued DNA mutation position, where
+*S. aureus* has the 23S rRNA sites this feature was built for. The synthetic control
+above shows the method recovering a 5% minority allele in the organism it applies to.
+
+**One isolate lost its reads and kept its assembly.** `KP88_R2.fastq.gz` in this
+collection is zero bytes — truncated on download in 2020, one file out of 508. It is
+reported as an `assembly` sample carrying the reason in its warnings, rather than
+silently absent or silently half-analysed. Before the fix in this release it ended the
+whole 25-sample batch.
+
+### Known gap: a scheme can outvote the species sketch
+
+One isolate in 5375 was reported as the wrong genus. `KP79_ST512-1LV` matches the
+EnteroBase *E. coli* MLST scheme at 8/8 exact loci — that scheme has accumulated
+alleles which also match *Klebsiella*, which is the failure this pipeline was already
+designed to guard against — while its Mash sketch says *Klebsiella pneumoniae* at
+d=0.0210. The sketch overrides the scheme only below d=0.02, so it missed by a
+thousandth, and the isolate was reported as *Escherichia coli* **at "strong"
+confidence**, with the *Escherichia* mutation catalogue applied to it. `mlst` also
+declined to type this genome, and its allele calls — `gapA(54,144)`, `infB(3,123)` —
+suggest a mixed or contaminated assembly, which is why neither method is on firm
+ground.
+
+This release downgrades that call: when the scheme and the sketch name different
+genera, the confidence becomes `weak` and the evidence string says which two genera
+disagree, instead of reporting a contested call as settled.
+
+**It does not change which answer wins.** A sketch outside the override threshold has
+not earned the call, and moving that threshold would re-decide the species of every
+genome in this validation, so it is left for a release that can be validated on its
+own terms. Until then the call is contested and now says so — `species_confidence`
+is the field to filter on.
 
 ### Known gap: CARD carries no drug class for most efflux entries
 

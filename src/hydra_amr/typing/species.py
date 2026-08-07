@@ -168,6 +168,21 @@ class SpeciesIdentifier:
                 return sketch
             distance = f" (d={sketch.distance:.4f})" if sketch.distance is not None else ""
             call.evidence += f"; Mash {sketch.name}{distance}"
+            # Two independent methods naming different genera is not strong evidence
+            # for either of them. The scheme still wins the call -- a sketch that
+            # missed MASH_STRONG_DISTANCE has not earned an override -- but the
+            # confidence must not claim more than the evidence supports.
+            #
+            # This is not hypothetical. One isolate here matched the EnteroBase
+            # E. coli scheme at 8/8 exact loci while its sketch said Klebsiella
+            # pneumoniae at d=0.0210, a thousandth outside the override threshold.
+            # It was reported as Escherichia coli with "strong" confidence, and the
+            # E. coli mutation catalogue was applied to a Klebsiella genome.
+            same_genus = (sketch.genus or "").lower() == (call.genus or "").lower()
+            if disagrees and not same_genus and sketch.genus and call.genus:
+                call.confidence = "weak"
+                call.evidence += (f"; genus disagreement, sketch says {sketch.genus}"
+                                  f" and the scheme says {call.genus}")
         return call
 
     def identify_reads(self, reads: Path, threads: int = 1) -> SpeciesCall | None:
