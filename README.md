@@ -136,29 +136,43 @@ Measured on **5375 *Klebsiella* samples** — 667 closed reference genomes, 1279
 isolates, 2933 published genomes whose sequence type was recorded independently, and
 496 isolates screened from assembly and reads together. Every one completed.
 
-<p align="center"><img src="docs/figures/fig-typing.svg" alt="Sequence typing accuracy" width="760"></p>
+Every comparison below gave both tools the same genomes, the same database, the same
+thresholds and the same overlap reporting.
 
-The 2933 published genomes are the ones with an answer key, and every one matches.
-Of the four differences against `mlst` 2.35.0, three are genomes it declined to type
-because a locus appeared twice — `gapA(51,51)`, `rpoB(4,4)` — where both copies are
+<p align="center"><img src="docs/figures/fig-headtohead.svg" alt="Head to head against the reference tools" width="820"></p>
+
+<p align="center"><img src="docs/figures/fig-recall.svg" alt="Gene recall against abricate, per database" width="820"></p>
+
+Across nine databases and 667 genomes, **123 gene instances were found by abricate and
+not by Hydra — 0.18 per genome.** Five databases match exactly.
+
+<p align="center"><img src="docs/figures/fig-speed.svg" alt="Runtime against four reference tools" width="820"></p>
+
+### Sequence typing
+
+**2933 of 2933** published genomes match the sequence type recorded for them, and
+**2933 of 2933** match Kleborate 3.2.4. Against `mlst` 2.35.0 the counts are 666/667,
+1279/1279 and 2931/2933 — and all three differences are genomes `mlst` declined to
+type because a locus appeared twice (`gapA(51,51)`, `rpoB(4,4)`) where both copies are
 the same allele and the profile is unambiguous. Hydra typed each correctly, and the
 recorded sequence type agrees.
 
-<p align="center"><img src="docs/figures/fig-speed.svg" alt="Runtime against four reference tools" width="760"></p>
+### Colistin, where losing a gene is the mechanism
 
-<p align="center"><img src="docs/figures/fig-databases.svg" alt="Gene concordance per database" width="760"></p>
+Colistin resistance in *K. pneumoniae* is usually *mgrB* — a 47-residue repressor —
+broken by an insertion sequence. There is no acquired gene to find and no catalogued
+substitution, so Hydra detects the truncation itself. On the 766 isolates with a
+measured EUCAST result:
 
-Each database is compared against abricate running *the same database* on the same
-genomes. Across all nine, abricate found 139 gene instances Hydra did not — under one
-per five genomes.
+| | sensitivity | specificity | balanced accuracy | very major errors |
+|---|---|---|---|---|
+| **Hydra** | **0.440** | 0.973 | **0.706** | **56** |
+| Kleborate 3.2.4 | 0.360 | 0.973 | 0.666 | 64 |
 
-Against **AMRFinderPlus 4.2.7**, which shares Hydra's AMRProt catalogue: gene-family
-agreement **0.805**, and on resistance point mutations **556 shared with one unique to
-Hydra**. Against **Kleborate 3.2.4**: sequence type **2933/2933**, virulence score
-**2917/2933 (99.45%)**.
+### Heteroresistance
 
-Heteroresistance is validated against a synthetic control — reads simulated from a 23S
-reference with a known fraction carrying `23S_G2577T`:
+Validated against a synthetic control — reads simulated from a 23S reference with a
+known fraction carrying `23S_G2577T`:
 
 | Simulated | Measured | Called |
 |---|---|---|

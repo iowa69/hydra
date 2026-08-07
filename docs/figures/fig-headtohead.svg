@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="436" viewBox="0 0 820 436" role="img" aria-label="Head to head on 5375 Klebsiella samples">
+
+  <style>
+    .bg    { fill: #ffffff; }
+    .ttl   { fill: #0f172a; font: 600 16px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .sub   { fill: #64748b; font: 400 12px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .lbl   { fill: #334155; font: 400 12.5px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .val   { fill: #0f172a; font: 600 12.5px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .mut   { fill: #64748b; font: 400 11.5px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .cap   { fill: #94a3b8; font: 400 11px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .badge { font: 700 10px system-ui, -apple-system, Segoe UI, sans-serif; fill: #ffffff; }
+    .rule  { stroke: #e2e8f0; stroke-width: 1; }
+    @media (prefers-color-scheme: dark) {
+      .bg   { fill: #0d1117; } .ttl { fill: #e6edf3; } .sub { fill: #8b949e; }
+      .lbl  { fill: #c9d1d9; } .val { fill: #e6edf3; } .mut { fill: #8b949e; }
+      .cap  { fill: #6e7681; } .rule { stroke: #21262d; }
+    }
+  </style>
+
+<rect class="bg" width="820" height="436" rx="8"/>
+<text class="ttl" x="24" y="32">Head to head on 5375 Klebsiella samples</text>
+<text class="sub" x="24" y="52">same genomes, same databases, same thresholds and the same overlap reporting</text>
+<text class="cap" x="300" y="74">HYDRA</text>
+<text class="cap" x="470" y="74">BEST OF THE OTHERS</text>
+<line class="rule" x1="24" y1="81" x2="796" y2="81"/>
+<text class="lbl" x="24" y="100">Whole job, per genome</text>
+<text class="val" x="300" y="100">11.7 s</text>
+<text class="mut" x="470" y="100">18.1 s, four tools</text>
+<rect x="728" y="89" width="53" height="16" rx="8" fill="#10b981"/><text class="badge" x="754.5" y="100" text-anchor="middle">AHEAD</text>
+<line class="rule" x1="24" y1="114" x2="796" y2="114"/>
+<text class="lbl" x="24" y="133">Tools to run</text>
+<text class="val" x="300" y="133">1</text>
+<text class="mut" x="470" y="133">4</text>
+<rect x="728" y="122" width="53" height="16" rx="8" fill="#10b981"/><text class="badge" x="754.5" y="133" text-anchor="middle">AHEAD</text>
+<line class="rule" x1="24" y1="147" x2="796" y2="147"/>
+<text class="lbl" x="24" y="166">Sequence type vs answer key</text>
+<text class="val" x="300" y="166">2933 / 2933</text>
+<text class="mut" x="470" y="166">not attempted</text>
+<rect x="728" y="155" width="53" height="16" rx="8" fill="#10b981"/><text class="badge" x="754.5" y="166" text-anchor="middle">AHEAD</text>
+<line class="rule" x1="24" y1="180" x2="796" y2="180"/>
+<text class="lbl" x="24" y="199">Genomes mlst will not type</text>
+<text class="val" x="300" y="199">typed 3 of 3</text>
+<text class="mut" x="470" y="199">declined all 3</text>
+<rect x="728" y="188" width="53" height="16" rx="8" fill="#10b981"/><text class="badge" x="754.5" y="199" text-anchor="middle">AHEAD</text>
+<line class="rule" x1="24" y1="213" x2="796" y2="213"/>
+<text class="lbl" x="24" y="232">Colistin, very major errors</text>
+<text class="val" x="300" y="232">56</text>
+<text class="mut" x="470" y="232">Kleborate 64</text>
+<rect x="728" y="221" width="53" height="16" rx="8" fill="#10b981"/><text class="badge" x="754.5" y="232" text-anchor="middle">AHEAD</text>
+<line class="rule" x1="24" y1="246" x2="796" y2="246"/>
+<text class="lbl" x="24" y="265">Colistin, balanced accuracy</text>
+<text class="val" x="300" y="265">0.706</text>
+<text class="mut" x="470" y="265">Kleborate 0.666</text>
+<rect x="728" y="254" width="53" height="16" rx="8" fill="#10b981"/><text class="badge" x="754.5" y="265" text-anchor="middle">AHEAD</text>
+<line class="rule" x1="24" y1="279" x2="796" y2="279"/>
+<text class="lbl" x="24" y="298">Gene recall, nine databases</text>
+<text class="val" x="300" y="298">99.89%</text>
+<text class="mut" x="470" y="298">abricate 100%</text>
+<rect x="728" y="287" width="53" height="16" rx="8" fill="#3b82f6"/><text class="badge" x="754.5" y="298" text-anchor="middle">LEVEL</text>
+<line class="rule" x1="24" y1="312" x2="796" y2="312"/>
+<text class="lbl" x="24" y="331">Sequence type vs Kleborate</text>
+<text class="val" x="300" y="331">2933 / 2933</text>
+<text class="mut" x="470" y="331">2933 / 2933</text>
+<rect x="728" y="320" width="53" height="16" rx="8" fill="#3b82f6"/><text class="badge" x="754.5" y="331" text-anchor="middle">LEVEL</text>
+<line class="rule" x1="24" y1="345" x2="796" y2="345"/>
+<text class="lbl" x="24" y="364">Virulence score vs Kleborate</text>
+<text class="val" x="300" y="364">99.45%</text>
+<text class="mut" x="470" y="364">reference</text>
+<rect x="728" y="353" width="53" height="16" rx="8" fill="#3b82f6"/><text class="badge" x="754.5" y="364" text-anchor="middle">LEVEL</text>
+<line class="rule" x1="24" y1="378" x2="796" y2="378"/>
+<text class="lbl" x="24" y="397">Phenotype, balanced accuracy</text>
+<text class="val" x="300" y="397">0.629</text>
+<text class="mut" x="470" y="397">AMRFinderPlus 0.633</text>
+<rect x="728" y="386" width="53" height="16" rx="8" fill="#3b82f6"/><text class="badge" x="754.5" y="397" text-anchor="middle">LEVEL</text>
+</svg>

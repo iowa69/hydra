@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="383" viewBox="0 0 820 383" role="img" aria-label="Everything abricate finds, Hydra finds">
+
+  <style>
+    .bg    { fill: #ffffff; }
+    .ttl   { fill: #0f172a; font: 600 16px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .sub   { fill: #64748b; font: 400 12px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .lbl   { fill: #334155; font: 400 12.5px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .val   { fill: #0f172a; font: 600 12.5px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .mut   { fill: #64748b; font: 400 11.5px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .cap   { fill: #94a3b8; font: 400 11px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .badge { font: 700 10px system-ui, -apple-system, Segoe UI, sans-serif; fill: #ffffff; }
+    .rule  { stroke: #e2e8f0; stroke-width: 1; }
+    @media (prefers-color-scheme: dark) {
+      .bg   { fill: #0d1117; } .ttl { fill: #e6edf3; } .sub { fill: #8b949e; }
+      .lbl  { fill: #c9d1d9; } .val { fill: #e6edf3; } .mut { fill: #8b949e; }
+      .cap  { fill: #6e7681; } .rule { stroke: #21262d; }
+    }
+  </style>
+
+<rect class="bg" width="820" height="383" rx="8"/>
+<text class="ttl" x="24" y="32">Everything abricate finds, Hydra finds</text>
+<text class="sub" x="24" y="52">667 closed genomes, one database per run - 123 gene instances missed in total, 0.18 per genome</text>
+<line class="rule" x1="168.0" y1="74" x2="168.0" y2="339"/>
+<text class="cap" x="168.0" y="68" text-anchor="middle">99%</text>
+<line class="rule" x1="282.0" y1="74" x2="282.0" y2="339"/>
+<text class="cap" x="282.0" y="68" text-anchor="middle">99.25%</text>
+<line class="rule" x1="396.0" y1="74" x2="396.0" y2="339"/>
+<text class="cap" x="396.0" y="68" text-anchor="middle">99.5%</text>
+<line class="rule" x1="510.0" y1="74" x2="510.0" y2="339"/>
+<text class="cap" x="510.0" y="68" text-anchor="middle">99.75%</text>
+<line class="rule" x1="624.0" y1="74" x2="624.0" y2="339"/>
+<text class="cap" x="624.0" y="68" text-anchor="middle">100%</text>
+<text class="lbl" x="24" y="100">NCBI</text>
+<rect x="168" y="88" width="456.0" height="15" rx="3" fill="#10b981" opacity="0.92"/>
+<text class="val" x="638" y="100">100.00%</text>
+<text class="mut" x="700" y="100">0 missed</text>
+<text class="lbl" x="24" y="129">CARD</text>
+<rect x="168" y="117" width="456.0" height="15" rx="3" fill="#10b981" opacity="0.92"/>
+<text class="val" x="638" y="129">100.00%</text>
+<text class="mut" x="700" y="129">0 missed</text>
+<text class="lbl" x="24" y="158">VFDB</text>
+<rect x="168" y="146" width="456.0" height="15" rx="3" fill="#10b981" opacity="0.92"/>
+<text class="val" x="638" y="158">100.00%</text>
+<text class="mut" x="700" y="158">0 missed</text>
+<text class="lbl" x="24" y="187">PlasmidFinder</text>
+<rect x="168" y="175" width="456.0" height="15" rx="3" fill="#10b981" opacity="0.92"/>
+<text class="val" x="638" y="187">100.00%</text>
+<text class="mut" x="700" y="187">0 missed</text>
+<text class="lbl" x="24" y="216">ecoh</text>
+<rect x="168" y="204" width="456.0" height="15" rx="3" fill="#10b981" opacity="0.92"/>
+<text class="val" x="638" y="216">100.00%</text>
+<text class="mut" x="700" y="216">0 missed</text>
+<text class="lbl" x="24" y="245">ARG-ANNOT</text>
+<rect x="168" y="233" width="442.3" height="15" rx="3" fill="#10b981" opacity="0.92"/>
+<text class="val" x="638" y="245">99.97%</text>
+<text class="mut" x="700" y="245">2 missed</text>
+<text class="lbl" x="24" y="274">MEGARes</text>
+<rect x="168" y="262" width="383.0" height="15" rx="3" fill="#3b82f6" opacity="0.92"/>
+<text class="val" x="638" y="274">99.84%</text>
+<text class="mut" x="700" y="274">35 missed</text>
+<text class="lbl" x="24" y="303">ResFinder</text>
+<rect x="168" y="291" width="291.8" height="15" rx="3" fill="#3b82f6" opacity="0.92"/>
+<text class="val" x="638" y="303">99.64%</text>
+<text class="mut" x="700" y="303">16 missed</text>
+<text class="lbl" x="24" y="332">E. coli VF</text>
+<rect x="168" y="320" width="205.2" height="15" rx="3" fill="#3b82f6" opacity="0.92"/>
+<text class="val" x="638" y="332">99.45%</text>
+<text class="mut" x="700" y="332">70 missed</text>
+<text class="cap" x="24" y="371">axis starts at 99% - CARD compared on the 5902 gene names both copies contain</text>
+</svg>

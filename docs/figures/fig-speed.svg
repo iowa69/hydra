@@ -1,35 +1,36 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="760" height="178" viewBox="0 0 760 178" role="img" aria-label="One pass instead of four">
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="190" viewBox="0 0 820 190" role="img" aria-label="One pass instead of four">
 
   <style>
-    .bg   { fill: #ffffff; }
-    .ttl  { fill: #0f172a; font: 600 15px system-ui, -apple-system, Segoe UI, sans-serif; }
-    .sub  { fill: #64748b; font: 400 12px system-ui, -apple-system, Segoe UI, sans-serif; }
-    .lbl  { fill: #334155; font: 400 12.5px system-ui, -apple-system, Segoe UI, sans-serif; }
-    .val  { fill: #0f172a; font: 600 12.5px system-ui, -apple-system, Segoe UI, sans-serif; }
-    .tick { stroke: #e2e8f0; stroke-width: 1; }
+    .bg    { fill: #ffffff; }
+    .ttl   { fill: #0f172a; font: 600 16px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .sub   { fill: #64748b; font: 400 12px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .lbl   { fill: #334155; font: 400 12.5px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .val   { fill: #0f172a; font: 600 12.5px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .mut   { fill: #64748b; font: 400 11.5px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .cap   { fill: #94a3b8; font: 400 11px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .badge { font: 700 10px system-ui, -apple-system, Segoe UI, sans-serif; fill: #ffffff; }
+    .rule  { stroke: #e2e8f0; stroke-width: 1; }
     @media (prefers-color-scheme: dark) {
-      .bg   { fill: #0d1117; }
-      .ttl  { fill: #e6edf3; }
-      .sub  { fill: #8b949e; }
-      .lbl  { fill: #c9d1d9; }
-      .val  { fill: #e6edf3; }
-      .tick { stroke: #21262d; }
+      .bg   { fill: #0d1117; } .ttl { fill: #e6edf3; } .sub { fill: #8b949e; }
+      .lbl  { fill: #c9d1d9; } .val { fill: #e6edf3; } .mut { fill: #8b949e; }
+      .cap  { fill: #6e7681; } .rule { stroke: #21262d; }
     }
   </style>
 
-<rect class="bg" width="760" height="178" rx="8"/>
-<text class="ttl" x="24" y="30">One pass instead of four</text>
-<text class="sub" x="24" y="49">667 closed genomes, 24 cores, same machine</text>
-<rect x="24.0" y="78" width="329.2" height="26" fill="#3b82f6" opacity="0.85"/>
-<text class="val" x="188.6" y="95" text-anchor="middle" style="font-size:11px">AMRFinderPlus 8.4 s</text>
-<rect x="353.2" y="78" width="203.8" height="26" fill="#14b8a6" opacity="0.85"/>
-<text class="val" x="455.1" y="95" text-anchor="middle" style="font-size:11px">Kleborate 5.2 s</text>
-<rect x="557.0" y="78" width="175.4" height="26" fill="#f59e0b" opacity="0.85"/>
-<text class="val" x="644.7" y="95" text-anchor="middle" style="font-size:11px">abricate x9 4.5 s</text>
-<rect x="732.5" y="78" width="3.5" height="26" fill="#94a3b8" opacity="0.85"/>
-<text class="lbl" x="24" y="72">Four tools, run separately</text>
-<text class="val" x="736" y="72" text-anchor="end">18.1 s / genome</text>
-<text class="lbl" x="24" y="136">Hydra --preset deep, everything at once</text>
-<rect x="24" y="142" width="462.1" height="26" rx="2" fill="#14b8a6"/>
-<text class="val" x="736" y="136" text-anchor="end">11.7 s / genome</text>
+<rect class="bg" width="820" height="190" rx="8"/>
+<text class="ttl" x="24" y="32">One pass instead of four</text>
+<text class="sub" x="24" y="52">667 closed genomes, 24 cores, same machine</text>
+<rect x="24.0" y="88" width="356.9" height="28" fill="#3b82f6" opacity="0.88"/>
+<text class="badge" x="202.5" y="106" text-anchor="middle">AMRFinderPlus 8.4 s</text>
+<rect x="380.9" y="88" width="221.0" height="28" fill="#8b5cf6" opacity="0.88"/>
+<text class="badge" x="491.4" y="106" text-anchor="middle">Kleborate 5.2 s</text>
+<rect x="601.9" y="88" width="190.2" height="28" fill="#f59e0b" opacity="0.88"/>
+<text class="badge" x="697.0" y="106" text-anchor="middle">abricate x9 4.5 s</text>
+<rect x="792.2" y="88" width="3.8" height="28" fill="#94a3b8" opacity="0.88"/>
+<text class="lbl" x="24" y="82">Four tools, run one after another</text>
+<text class="val" x="796" y="82" text-anchor="end">18.1 s per genome</text>
+<text class="lbl" x="24" y="150">Hydra, all of it in one pass</text>
+<rect x="24" y="156" width="501.0" height="28" rx="2" fill="#10b981"/>
+<text class="badge" x="40" y="174">1.5x FASTER</text>
+<text class="val" x="796" y="150" text-anchor="end">11.7 s per genome</text>
 </svg>
