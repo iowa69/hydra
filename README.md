@@ -681,7 +681,7 @@ have. **1279/1279 completed, 9.7 s a genome.**
 
 | | Result |
 |---|---|
-| Sequence type vs `mlst` 2.35.0 | **1278/1279 (99.92%)**; of those both tools typed, **1239/1239 (100%)** |
+| Sequence type vs `mlst` 2.35.0 | **1279/1279 (100%)** with this release's scheme fix; 1278/1279 before it |
 | Virulence score vs Kleborate 3.2.4 | **1277/1278 (99.92%)** |
 | Sequence type vs Kleborate | 1238/1278 (96.87%) |
 | Resistance score vs Kleborate | 1122/1278 (87.79%) |
@@ -746,33 +746,47 @@ the same measurements. Each is asked the same question using **its own drug anno
 — a hand-written gene list would encode our judgement and flatter whichever tool
 shared it. Intermediates are excluded.
 
-Two drugs had to be dropped: 755 of 773 isolates are meropenem-resistant and 832 of
-838 ciprofloxacin-resistant, so "call everything resistant" scores a perfect
-sensitivity and a zero specificity, and every tool lands on 0.5 whatever it reports.
-Six drugs remain where the smaller class is at least a tenth of the data.
+Three drugs are excluded, and the reason is that they cannot separate any two tools.
+755 of 773 isolates are meropenem-resistant and 832 of 838 ciprofloxacin-resistant, so
+"call everything resistant" earns a perfect sensitivity and a zero specificity and
+every tool scores 0.5. Fosfomycin fails the same way from the other end: *fosA* is
+intrinsic to *K. pneumoniae*, every tool reports it in every isolate, so every tool
+predicts resistance for 100% of them. One is a constant phenotype and the other a
+constant prediction; neither is decided by looking at the answer.
 
 | Tool | Mean balanced accuracy | Very major errors | Major errors |
 |---|---|---|---|
-| AMRFinderPlus 4.2.7 | **0.611** | 284 | 862 |
-| abricate 1.4.0 (ncbi) | 0.588 | 528 | 782 |
-| **Hydra** | 0.580 | **153** | 1236 |
-| Kleborate 3.2.4 | 0.573 | 863 | 905 |
-| abricate (resfinder) | 0.564 | 744 | 778 |
+| AMRFinderPlus 4.2.7 | **0.633** | 284 | 549 |
+| **Hydra** | **0.629** | 291 | 547 |
+| abricate 1.4.0 (ncbi) | 0.606 | 528 | 469 |
+| Kleborate 3.2.4 | 0.587 | 586 | 905 |
+| abricate (resfinder) | 0.577 | 744 | 465 |
 
-**Hydra does not win on balanced accuracy here.** AMRFinderPlus is ahead, and Hydra is
-third of five. What Hydra has is the fewest very major errors of any tool — 153 against
-284 for the next best and 863 for Kleborate — bought with the most major errors. It
-sits at a deliberately sensitive operating point: it rarely calls a resistant isolate
-susceptible, and often calls a susceptible one resistant. Which of those two errors
-matters more is a decision about the use, not a property of the tool, and the table
-gives both rather than a single number that hides the trade.
+Hydra and AMRFinderPlus are level, and on four of the five drugs they are identical to
+three decimals. That is the expected result rather than a coincidence: both search the
+same AMRProt catalogue, so where Hydra adds nothing beyond it they should agree
+exactly, and they do. Hydra's remaining margin over abricate and Kleborate comes from
+the databases it screens alongside that catalogue.
 
-Read the absolute values with care. Every tool scores between 0.56 and 0.61, because
-predicting a phenotype from gene presence is genuinely hard: aminoglycoside genes are
-near-universal in this collection, *fosA* is intrinsic to the species so genotype
-predicts resistance for all of it, and tigecycline resistance is efflux-regulatory and
-rarely an acquired gene at all. None of these tools was built to be an MIC predictor,
-and none of them is one.
+**An earlier version of this table put Hydra third at 0.580, with 1236 major errors.
+That was a measurement error, not a result.** Hydra keeps every overlapping allele at
+a locus and flags the best one; the comparison was reading the rejected alternatives
+too. On the gentamicin-susceptible isolates Hydra's primary call is `aac(6')-Ib-AKT`,
+annotated amikacin/kanamycin/tobramycin and identical to AMRFinderPlus — while the
+demoted alternative at the same locus, `aac(6')-Ib'`, is annotated gentamicin. 386 of
+those 391 rows were non-primary. Counting them turned correct calls into gentamicin
+false positives, and only Hydra was affected, because abricate and AMRFinderPlus emit
+one row per locus and have no rejected alternatives to misread. Reading the primary
+call removed 689 major errors.
+
+Read the absolute values with care. Every tool sits between 0.58 and 0.63, because
+predicting a phenotype from gene presence is genuinely hard: `aac(6')-Ib` is carried by
+plenty of amikacin-susceptible isolates, and tigecycline resistance is efflux-regulatory
+rather than an acquired gene. Colistin is where Hydra loses most ground — 77 very major
+errors against Kleborate's 64 — because resistance there is usually *mgrB* disrupted by
+an insertion, and a gene that is absent or interrupted is not something a
+presence-and-mutation screen reports. None of these tools was built to be an MIC
+predictor, and none of them is one.
 
 ### 496 isolates with assembly and reads together
 
