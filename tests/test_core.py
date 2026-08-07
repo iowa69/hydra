@@ -26,7 +26,7 @@ from hydra_amr.records import Hit, MlstCall, SampleResult, SpeciesCall, TypingRe
 from hydra_amr.typing.lineage import _marker_group, resistance_score, virulence_score
 from hydra_amr.typing.species import (SchemeOrganism, SpeciesIdentifier,
                                       _inherit_organism_by_species)
-from hydra_amr.typing.mlst import MlstTyper, SchemeProfiles
+from hydra_amr.typing.mlst import LocusHit, MlstTyper, SchemeProfiles
 from hydra_amr.report.html import _format_cell
 from hydra_amr.report.tables import (GENE_COLUMNS, _coverage_glyph, class_summary,
                                      gene_table, long_table, matrix, summary_table)
@@ -1018,8 +1018,12 @@ def test_genus_disagreement_is_not_a_strong_species_call():
 
     call = identifier.identify("s", mlst, assembly=None, sketch=sketch)
 
-    assert call.confidence == "weak"
-    assert "genus disagreement" in call.evidence
+    # The sketch wins the genus: it compares the whole genome, the scheme eight loci.
+    assert call.genus == "Klebsiella"
+    assert call.name == "Klebsiella pneumoniae"
+    # And it does not inherit the rejected call's organism catalogue.
+    assert call.organism != "Escherichia"
+    assert "cannot outvote" in call.evidence
 
 
 def test_agreeing_scheme_and_sketch_stay_strong():
@@ -1036,3 +1040,51 @@ def test_agreeing_scheme_and_sketch_stay_strong():
 
     assert call.confidence == "strong"
     assert "genus disagreement" not in call.evidence
+
+
+class _StubProfiles:
+    """Just enough of SchemeProfiles to exercise scheme selection."""
+
+    def __init__(self, loci_by_scheme, profiles=None):
+        self._loci = loci_by_scheme
+        self._profiles = profiles or {}
+
+    def loci(self, scheme):
+        return self._loci.get(scheme, [])
+
+    def load(self, scheme):
+        # Real SchemeProfiles.load returns (loci, profile_table, extra_columns).
+        return self._loci.get(scheme, []), self._profiles.get(scheme, {}), {}
+
+
+def _exact(locus, allele):
+    return LocusHit(locus=locus, allele=allele, identity=100.0, coverage=100.0, bitscore=1000.0)
+
+
+def test_the_scheme_for_the_sketched_genus_is_always_evaluated():
+    """A mixed assembly can score full marks on a neighbouring genus's scheme.
+
+    Ranking is by exact loci. A contaminated Klebsiella isolate loses exact loci in
+    the klebsiella scheme while still matching the EnteroBase E. coli scheme at 8/8,
+    so the scheme for the genus the sketch actually found never reached the
+    shortlist and could not be preferred over the one that outranked it.
+    """
+    typer = MlstTyper.__new__(MlstTyper)
+    typer.profiles = _StubProfiles({
+        "ecoli": ["dinB", "icdA", "pabB", "polB", "putP", "trpA", "trpB", "uidA"],
+        "klebsiella": ["gapA", "infB", "mdh", "pgi", "phoE", "rpoB", "tonB"],
+    })
+    typer._scheme_genus = {"ecoli": "Escherichia", "klebsiella": "Klebsiella"}
+
+    found = {
+        # Full marks on the wrong genus...
+        "ecoli": {l: _exact(l, "9") for l in typer.profiles.loci("ecoli")},
+        # ...and two loci short on the right one, so it ranks below.
+        "klebsiella": {l: _exact(l, "1") for l in typer.profiles.loci("klebsiella")[:5]},
+    }
+
+    without_genus = typer._call_sample(found, None, "")
+    with_genus = typer._call_sample(found, None, "Klebsiella")
+
+    assert without_genus.scheme == "ecoli"      # what ranking alone gives
+    assert with_genus.scheme == "klebsiella"    # what the sketched genus should give

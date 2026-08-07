@@ -159,9 +159,30 @@ class SpeciesIdentifier:
             # loses the distinction the scheme was never able to make.
             disagrees = sketch.name.lower() != call.name.lower()
             confident = sketch.distance is not None and sketch.distance < MASH_STRONG_DISTANCE
-            if call.confidence in ("none", "weak") or (confident and disagrees):
+            # A disagreement about *genus* is settled by the sketch, not the scheme,
+            # and at the looser species distance rather than the override distance.
+            #
+            # The two are not equal evidence. A sketch compares the whole genome; a
+            # scheme compares seven or eight housekeeping loci, and several PubMLST
+            # schemes have accumulated alleles matching neighbouring genera -- the
+            # EnteroBase E. coli scheme types some Klebsiella at 8/8 exact loci. When
+            # the two name different genera, the locus count is the thing that should
+            # give way. Inside one genus the old rule stands: resolving K. variicola
+            # from K. pneumoniae is what the strict threshold is for.
+            genus_conflict = bool(
+                sketch.genus and call.genus
+                and sketch.genus.lower() != call.genus.lower()
+                and sketch.distance is not None
+                and sketch.distance < MASH_SPECIES_DISTANCE)
+            if call.confidence in ("none", "weak") or (confident and disagrees) or genus_conflict:
                 if call.confidence != "none":
                     sketch.evidence += f"; MLST scheme {mlst.scheme} suggested {call.name}"
+                if genus_conflict and not confident:
+                    # Won on genus, but by a sketch that is not itself strong. Say so
+                    # rather than replacing one overconfident answer with another.
+                    sketch.confidence = "good" if sketch.confidence == "strong" else sketch.confidence
+                    sketch.evidence += (" (genus taken from the sketch: a scheme match"
+                                        " cannot outvote a whole-genome distance)")
                 # Never inherit the rejected call's organism: running the
                 # AMRFinderPlus rules for the wrong taxgroup is worse than
                 # running none at all.

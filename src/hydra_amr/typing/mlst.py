@@ -219,8 +219,19 @@ class MlstTyper:
         # housekeeping alleles, and some species have both a legacy and a current
         # scheme over the same loci. Evaluate the plausible ones, then prefer the
         # scheme that agrees with the species call and actually resolves an ST.
-        shortlist = [item for item in ranked[:6]
-                     if item[0][0] >= best_score[0] - 1 or item[1] == force_scheme]
+        # A scheme for the genus the sketch actually found is always worth
+        # evaluating, however far down it ranks. Ranking is by exact loci, and a
+        # mixed or contaminated assembly loses exact loci in its *own* scheme while
+        # a neighbouring genus's scheme -- which shares housekeeping alleles and is
+        # scored over different loci -- can still come out at full marks. That is
+        # how a Klebsiella isolate reaches 8/8 on the EnteroBase E. coli scheme and
+        # never gets its own scheme onto the shortlist to be preferred over it.
+        genus_schemes = {name for name, scheme_genus in self._scheme_genus.items()
+                         if genus and scheme_genus == genus}
+        shortlist = [item for item in ranked
+                     if (item in ranked[:6]
+                         and (item[0][0] >= best_score[0] - 1 or item[1] == force_scheme))
+                     or item[1] in genus_schemes]
         evaluated = [self._evaluate_scheme(scheme, loci_hits)
                      for _score, scheme, loci_hits in shortlist]
 
