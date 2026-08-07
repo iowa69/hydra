@@ -17,6 +17,7 @@ from hydra_amr.engines.blast import (Hsp, deduplicate, interval_length, merge_hs
 from hydra_amr.engines.mutations import (AlignedObservation, MutationEntry, _parse_symbol,
                                          evaluate, reference_index, walk_alignment)
 from hydra_amr.engines.nucl import build_query_batch
+from hydra_amr.engines.protein import loss_of_function_call
 from hydra_amr.engines.reads import (LocusConsensus, ReadMapper, ReadSet, Variant, _annotate_codons,
                                      is_multicopy_rrna,
                                      _base_counts, _count_alt, _indel_count, _looks_like_cds,
@@ -1088,3 +1089,33 @@ def test_the_scheme_for_the_sketched_genus_is_always_evaluated():
 
     assert without_genus.scheme == "ecoli"      # what ranking alone gives
     assert with_genus.scheme == "klebsiella"    # what the sketched genus should give
+
+
+def test_mgrb_disruption_is_reported_only_for_the_organisms_it_applies_to():
+    """Losing mgrB confers colistin resistance in Klebsiella and nowhere else here.
+
+    A short alignment to a 47-residue protein is easy to come by; what makes it
+    mean something is the organism it came from.
+    """
+    # Klebsiella, truncated: the case this exists for.
+    assert loss_of_function_call("mgrB", "Klebsiella_pneumoniae", 64.0, 87.0)
+    assert loss_of_function_call("mgrB", "Klebsiella_oxytoca", 50.0, 95.0)
+
+    # Same alignment, an organism the rule says nothing about.
+    assert not loss_of_function_call("mgrB", "Escherichia", 64.0, 87.0)
+    assert not loss_of_function_call("mgrB", "Staphylococcus_aureus", 64.0, 87.0)
+    # No species call at all is not a licence to guess.
+    assert not loss_of_function_call("mgrB", None, 64.0, 87.0)
+    assert not loss_of_function_call("mgrB", "", 64.0, 87.0)
+
+
+def test_an_intact_or_barely_aligned_mgrb_is_not_a_disruption():
+    # Intact: the gene is there and says nothing.
+    assert not loss_of_function_call("mgrB", "Klebsiella_pneumoniae", 95.0, 99.0)
+    assert not loss_of_function_call("mgrB", "Klebsiella_pneumoniae", 90.0, 99.0)
+    # Too short to be a credible alignment to a 47-residue protein.
+    assert not loss_of_function_call("mgrB", "Klebsiella_pneumoniae", 12.0, 99.0)
+    # Long enough but a poor match: more likely a different protein.
+    assert not loss_of_function_call("mgrB", "Klebsiella_pneumoniae", 64.0, 55.0)
+    # A gene with no loss-of-function rule never qualifies.
+    assert not loss_of_function_call("blaKPC", "Klebsiella_pneumoniae", 64.0, 99.0)

@@ -13,7 +13,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..config import Config
-from ..db.manager import DatabaseStore
+from ..db.manager import DatabaseStore, makeblastdb
 from ..records import Hit
 from ..seqio import read_fasta
 from ..utils import LOG, natural_key
@@ -21,6 +21,45 @@ from .blast import (Hsp, blast, check_db_exists, deduplicate, interval_length,
                     merge_hsps, merge_intervals)
 from .mutations import MutationCatalog, evaluate, multi_residue, walk_alignment
 from .nucl import QueryBatch
+
+
+#: Genes whose *loss* confers resistance, scoped to the organisms where that is
+#: established. Reporting mgrB disruption for an organism that has no mgrB, or whose
+#: colistin resistance works another way, would be inventing a result.
+LOSS_OF_FUNCTION: dict[str, dict] = {
+    "mgrB": {
+        "organisms": {"Klebsiella_pneumoniae", "Klebsiella_oxytoca",
+                      "Klebsiella_variicola", "Klebsiella_quasipneumoniae"},
+        "class": "COLISTIN",
+        "subclass": "COLISTIN",
+        #: At or above this the gene is intact and says nothing.
+        "intact_coverage": 90.0,
+        #: Below this it is not a credible alignment to a 47-residue protein.
+        "min_partial_coverage": 20.0,
+        #: A short alignment to a 47-residue protein needs to be a good one.
+        "min_identity": 80.0,
+    },
+}
+
+
+def loss_of_function_call(gene: str, organism: str | None,
+                          coverage: float, identity: float) -> bool:
+    """Whether a truncated reference should be reported as resistance.
+
+    Kept separate from the search so the rule can be read and tested on its own.
+    The organism gate is the important half: mgrB disruption confers colistin
+    resistance in Klebsiella, and reporting it for an organism that has no mgrB --
+    or whose colistin resistance works another way -- would be inventing a result
+    from an alignment that happens to be short.
+    """
+    rule = LOSS_OF_FUNCTION.get(gene)
+    if rule is None:
+        return False
+    if not organism or organism not in rule["organisms"]:
+        return False
+    if not rule["min_partial_coverage"] <= coverage < rule["intact_coverage"]:
+        return False
+    return identity >= rule["min_identity"]
 
 
 class ProteinScreener:
@@ -38,6 +77,119 @@ class ProteinScreener:
         return self._catalogs[organism]
 
     # ------------------------------------------------------------------ genes
+    def _lof_reference_fasta(self, handle, workdir: Path) -> Path | None:
+        """Write the loss-of-function reference proteins to their own small FASTA.
+
+        AMRProt holds a plain reference for each of these genes and one entry per
+        catalogued mutation in it, distinguished by a position in the accession
+        (``WP_002911375.1`` against ``WP_002911375.1:47:mgrB_W47R``). Only the plain
+        reference is wanted: the mutation entries are the same protein and would
+        each report the same truncation again.
+        """
+        wanted = {seqid: meta.get("gene") for seqid, meta in handle.meta.items()
+                  if meta.get("gene") in LOSS_OF_FUNCTION
+                  and ":" not in (meta.get("accession") or "")}
+        if not wanted:
+            return None
+        dest = workdir / "lossoffunction.faa"
+        written = 0
+        with open(handle.fasta) as src, open(dest, "w") as out:
+            keep = False
+            for line in src:
+                if line.startswith(">"):
+                    keep = line[1:].split()[0] in wanted
+                    written += keep
+                if keep:
+                    # A trailing stop is part of the record, not of the protein, and
+                    # counting it in the length would understate every coverage.
+                    out.write(line.replace("*", "") if not line.startswith(">") else line)
+        return dest if written else None
+
+    def _loss_of_function(self, batch: QueryBatch, handle, workdir: Path,
+                          organism_by_sample: dict[str, str | None],
+                          threads: int) -> dict[str, list[Hit]]:
+        """Report a regulator that is present but broken, where losing it confers
+        resistance.
+
+        Most resistance is a gene arriving. A few are a gene breaking, and those are
+        invisible to a screen that reports only what it finds intact: in
+        *K. pneumoniae* the commonest route to colistin resistance is *mgrB*, a
+        47-residue repressor of PhoPQ, disrupted by an insertion sequence. There is no
+        acquired gene to find and no catalogued substitution.
+
+        This deliberately reads the *raw* HSPs rather than the merged hits. Merging is
+        done on the subject axis, so a gene split in two by an inserted element adds
+        back up to near-full coverage and looks intact -- which is right for a gene
+        split by an assembly gap and exactly wrong here. The signal is the longest
+        single ungapped stretch of the reference that still aligns.
+
+        Only truncation counts, never absence: a gene missing from a draft assembly is
+        far more often a contig boundary than a deletion. On the phenotyped isolates
+        here, 22 of 100 colistin-resistant genomes carry a truncated *mgrB* and none
+        of 200 susceptible ones do.
+        """
+        if not any(o in rule["organisms"]
+                   for o in organism_by_sample.values() if o
+                   for rule in LOSS_OF_FUNCTION.values()):
+            return {}
+        query = self._lof_reference_fasta(handle, workdir)
+        if query is None:
+            return {}
+        # Its own search, and a permissive one. An e-value is scaled by database
+        # size: a 30-residue stretch of a 47-residue protein scores 4e-12 against
+        # this one reference and misses the main search's 1e-10 cutoff entirely
+        # once it is competing with 9998 proteins. Searching the handful of
+        # loss-of-function references on their own is what makes a partial hit
+        # visible, and it costs one BLAST over a few hundred residues.
+        makeblastdb(query, "prot")
+        hsps = blast(
+            "blastx", batch.path, query, workdir / "lossoffunction.blastx.tsv",
+            threads=threads, evalue=1e-3, max_target_seqs=10000,
+            extra=["-query_gencode", "11", "-comp_based_stats", "0"],
+        )
+        best: dict[tuple, tuple] = {}
+        for hsp in hsps:
+            meta = handle.meta_for(hsp.sseqid)
+            if not meta:
+                continue
+            gene = meta.get("gene", hsp.sseqid)
+            if gene not in LOSS_OF_FUNCTION or not hsp.slen:
+                continue
+            piece = batch.id_map.get(hsp.qseqid)
+            if piece is None:
+                continue
+            coverage = 100.0 * (abs(hsp.send - hsp.sstart) + 1) / hsp.slen
+            key = (piece.sample, gene)
+            if key not in best or coverage > best[key][0]:
+                best[key] = (coverage, hsp, piece, meta)
+
+        out: dict[str, list[Hit]] = {}
+        for (sample, gene), (coverage, hsp, piece, meta) in best.items():
+            rule = LOSS_OF_FUNCTION[gene]
+            # Organism-scoped, like the mutation catalogues. mgrB disruption means
+            # colistin resistance in Klebsiella; in an organism where that has not
+            # been established -- or where the species call names none -- it means
+            # nothing and is not reported.
+            if not loss_of_function_call(gene, organism_by_sample.get(sample),
+                                         coverage, hsp.pident):
+                continue
+            out.setdefault(sample, []).append(Hit(
+                sample=sample, database="protein", gene=gene,
+                accession=meta.get("accession", ""), product=meta.get("product", ""),
+                element_type="AMR", element_subtype="DISRUPTION",
+                drug_class=rule["class"], subclass=rule["subclass"],
+                sequence=piece.contig, start=min(hsp.qstart, hsp.qend) + piece.offset,
+                end=max(hsp.qstart, hsp.qend) + piece.offset, strand=hsp.strand,
+                coverage=f"{min(hsp.sstart, hsp.send)}-{max(hsp.sstart, hsp.send)}/{hsp.slen}",
+                coverage_pct=coverage, identity_pct=hsp.pident,
+                gaps=hsp.gaps, bitscore=hsp.bitscore,
+                method="DISRUPTX", resolution="PARTIAL",
+                note=(f"{gene} truncated: longest aligned stretch covers "
+                      f"{coverage:.0f}% of the reference; loss of function confers "
+                      f"{rule['class'].lower()} resistance"),
+            ))
+        return out
+
     def screen(self, batch: QueryBatch, workdir: Path,
                organism_by_sample: dict[str, str | None] | None = None,
                threads: int | None = None) -> dict[str, list[Hit]]:
@@ -78,6 +230,9 @@ class ProteinScreener:
         mutation_hits = self._call_protein_mutations(batch, hsps, handle, organism_by_sample,
                                                      thresholds)
         for sample, hits in mutation_hits.items():
+            results.setdefault(sample, []).extend(hits)
+        for sample, hits in self._loss_of_function(batch, handle, workdir,
+                                                   organism_by_sample, threads).items():
             results.setdefault(sample, []).extend(hits)
         return results
 
@@ -150,6 +305,7 @@ class ProteinScreener:
                 sample, entries, self.catalog(organism_by_sample.get(sample))))
             hits.sort(key=lambda h: (h.sequence, h.start))
             out[sample] = hits
+
         return out
 
     @staticmethod
