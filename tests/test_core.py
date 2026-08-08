@@ -27,6 +27,7 @@ from hydra_amr.records import Hit, MlstCall, SampleResult, SpeciesCall, TypingRe
 from hydra_amr.typing.lineage import _marker_group, resistance_score, virulence_score
 from hydra_amr.typing.species import (SchemeOrganism, SpeciesIdentifier,
                                       _inherit_organism_by_species)
+from hydra_amr.typing.cassette import CassetteTyper
 from hydra_amr.typing.mlst import LocusHit, MlstTyper, SchemeProfiles
 from hydra_amr.report.html import _format_cell
 from hydra_amr.report.tables import (GENE_COLUMNS, _coverage_glyph, class_summary,
@@ -1043,6 +1044,15 @@ def test_agreeing_scheme_and_sketch_stay_strong():
     assert "genus disagreement" not in call.evidence
 
 
+class _StubStore:
+    """Just enough DatabaseStore for scheme selection."""
+
+    def __init__(self, installed):
+        self._installed = set(installed)
+
+    def is_installed(self, name):
+        return name in self._installed
+
 class _StubProfiles:
     """Just enough of SchemeProfiles to exercise scheme selection."""
 
@@ -1119,3 +1129,79 @@ def test_an_intact_or_barely_aligned_mgrb_is_not_a_disruption():
     assert not loss_of_function_call("mgrB", "Klebsiella_pneumoniae", 64.0, 55.0)
     # A gene with no loss-of-function rule never qualifies.
     assert not loss_of_function_call("blaKPC", "Klebsiella_pneumoniae", 64.0, 99.0)
+
+
+def test_porins_need_a_higher_identity_floor_than_mgrb():
+    """ompK35 and ompK36 are ~58% identical and each aligns to the other's reference
+    over its full length. At mgrB's 80% floor a paralogous full-length hit masks a
+    real truncation and both genes read as intact in every genome."""
+    from hydra_amr.engines.protein import LOSS_OF_FUNCTION
+    assert LOSS_OF_FUNCTION["ompK35"]["min_identity"] == 90.0
+    assert LOSS_OF_FUNCTION["ompK36"]["min_identity"] == 90.0
+    # A paralogue-grade match is not a call, however truncated it looks.
+    assert not loss_of_function_call("ompK35", "Klebsiella_pneumoniae", 60.0, 58.0)
+    # The real gene, truncated, is.
+    assert loss_of_function_call("ompK35", "Klebsiella_pneumoniae", 74.7, 100.0)
+
+
+def test_every_loss_of_function_rule_is_organism_scoped_and_classed():
+    from hydra_amr.engines.protein import LOSS_OF_FUNCTION
+    for gene, rule in LOSS_OF_FUNCTION.items():
+        assert rule["organisms"], gene
+        assert rule["class"] and rule["subclass"], gene
+        assert 0 < rule["min_partial_coverage"] < rule["intact_coverage"] <= 100, gene
+        # None of them may fire outside the organisms they were established in.
+        assert not loss_of_function_call(gene, "Staphylococcus_aureus", 60.0, 99.0)
+        assert not loss_of_function_call(gene, None, 60.0, 99.0)
+
+
+def test_element_schemes_are_scoped_to_their_genera():
+    """SCCmec means something in a staphylococcus and nothing anywhere else.
+
+    Every S. aureus carries the orfX flank the cassette integrates into, and it
+    alone covers ~21% of the nearest reference. Running the scheme on an organism
+    it was not defined for would be reading a flank and calling it a cassette.
+    """
+    typer = CassetteTyper.__new__(CassetteTyper)
+    typer.store = _StubStore(installed={"sccmec"})
+
+    staph = SpeciesCall(name="Staphylococcus aureus", genus="Staphylococcus")
+    kleb = SpeciesCall(name="Klebsiella pneumoniae", genus="Klebsiella")
+    assert [s.name for s in typer.applicable(staph)] == ["SCCmec"]
+    assert typer.applicable(kleb) == []
+    assert typer.applicable(None) == []
+    assert typer.applicable(SpeciesCall()) == []
+
+
+def test_a_scheme_whose_database_is_missing_is_skipped():
+    typer = CassetteTyper.__new__(CassetteTyper)
+    typer.store = _StubStore(installed=set())
+    staph = SpeciesCall(name="Staphylococcus aureus", genus="Staphylococcus")
+    assert typer.applicable(staph) == []
+
+
+def test_coverage_merges_overlapping_alignments():
+    from hydra_amr.typing.cassette import _coverage
+    # Two alignments meeting end to end cover the whole reference once, not twice.
+    assert _coverage([(1, 50), (51, 100)], 100) == 100.0
+    # Overlap is not counted twice.
+    assert _coverage([(1, 60), (40, 100)], 100) == 100.0
+    assert _coverage([(1, 25)], 100) == 25.0
+    assert _coverage([], 100) == 0.0
+    assert _coverage([(1, 10)], 0) == 0.0
+
+
+def test_below_the_coverage_floor_is_reported_as_absent_not_as_a_type():
+    from hydra_amr.typing.cassette import SCHEMES
+    typer = CassetteTyper.__new__(CassetteTyper)
+    scheme = SCHEMES["SCCmec"]
+    # 21% is what a methicillin-susceptible genome covers: the shared flank.
+    call = typer._call(scheme, {"ref1": [(1, 2100)]}, {"ref1": 10000},
+                       {"ref1": {"gene": "II(2A)", "accession": "D86934.2"}})
+    assert call.call == "none"
+    assert "coverage floor" in call.note
+    # A real cassette clears it and reports the type the database carries.
+    call = typer._call(scheme, {"ref1": [(1, 9800)]}, {"ref1": 10000},
+                       {"ref1": {"gene": "II(2A)", "accession": "D86934.2"}})
+    assert call.call == "II(2A)"
+    assert "D86934.2" in call.note

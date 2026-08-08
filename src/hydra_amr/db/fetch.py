@@ -245,6 +245,40 @@ def stage_plasmidfinder(work: Path, progress=None) -> Path:
                             "get/master.tar.gz", "plasmidfinder", progress)
 
 
+
+# --------------------------------------------------------------------- SCCmec
+#: `SCCmec_type_IV(2B)|SCCmec_type_IVa(2B)|gb|AB063172.2` names the type and then,
+#: where the reference is subtyped, the subtype. Both are kept.
+SCCMEC_TYPE = re.compile(r"SCCmec_type_([IVX]+[a-z]?\([^)]*\))")
+
+
+def stage_sccmec(work: Path, progress=None) -> Path:
+    """SCCmecFinder's whole-cassette references, as one nucleotide database.
+
+    Only the REFERENCE set is taken, not the EXTENDED one: the extended file adds
+    cassettes assembled from draft genomes, and a type called off those cannot be
+    told apart from a type called off the curated element.
+    """
+    archive = _get("https://bitbucket.org/genomicepidemiology/sccmecfinder_db/"
+                   "get/HEAD.tar.gz", work / "sccmec.tar.gz", progress)
+    unpacked = _unpack(archive, work / "raw")
+    source = next((p for p in unpacked.rglob("whole_cassette_SCCmec_database_REFERENCE*.fasta")),
+                  None)
+    if source is None:
+        raise HydraError("SCCmecFinder archive carried no whole-cassette reference file")
+    records = []
+    for header, seq in read_fasta(source):
+        types = SCCMEC_TYPE.findall(header)
+        if not types:
+            continue
+        accession = header.rsplit("|", 1)[-1].strip()
+        subtype = types[1] if len(types) > 1 else ""
+        records.append((f"sccmec~~~{types[0]}~~~{accession}~~~{subtype}", seq))
+    if not records:
+        raise HydraError("no SCCmec cassette references could be read from the archive")
+    return _write_sequences(records, work)
+
+
 # ----------------------------------------------------------------------- VFDB
 VFDB_HEADER = re.compile(r"^(?P<id>\S+?)\((?:gb\|)?(?P<acc>[^)]+)\)\s+\((?P<gene>[^)]+)\)\s+"
                          r"(?P<product>.*?)(?:\s+\[[^\]]*\])*$")
@@ -496,6 +530,7 @@ FETCHERS: dict[str, Callable[..., Path]] = {
     "card": stage_card,
     "resfinder": stage_resfinder,
     "plasmidfinder": stage_plasmidfinder,
+    "sccmec": stage_sccmec,
     "vfdb": stage_vfdb,
     "pubmlst": stage_pubmlst,
     "lineage": stage_lineage,

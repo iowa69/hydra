@@ -18,6 +18,7 @@ from .engines.reads import ReadMapper, ReadSet, assemble
 from .records import Hit, SampleResult
 from .seqio import (assembly_stats, fastq_stats, read_fasta, validate_fasta,
                     validate_fastq)
+from .typing.cassette import CassetteTyper
 from .typing.lineage import LineageTyper, resistance_score, virulence_score
 from .typing.mlst import MlstTyper
 from .typing.species import SpeciesIdentifier
@@ -329,6 +330,18 @@ class Pipeline:
                     results[sample].typing = typing
         elif self.options.typing:
             LOG.debug("lineage database not installed; skipping lineage typing")
+
+        if self.options.typing:
+            # Whole-element schemes: SCCmec, and the capsule loci that work the same
+            # way. Each is scoped to the genera it was defined in, so a batch of
+            # mixed species runs only the schemes that mean something per sample.
+            cassettes = CassetteTyper(self.store, self.config)
+            species_by_sample = {name: result.species for name, result in results.items()}
+            for sample, typing in cassettes.type_batch(
+                    batch, workdir, threads=self.config.threads,
+                    species_by_sample=species_by_sample).items():
+                if sample in results:
+                    results[sample].typing.extend(typing)
 
     def _dna_mutations(self, batch: QueryBatch, results: dict[str, SampleResult],
                        organism_by_sample: dict[str, str | None], protein: ProteinScreener,

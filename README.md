@@ -69,6 +69,13 @@ multi-copy locus.
 hydra run -a sample.fasta -1 sample_R1.fq.gz -2 sample_R2.fq.gz -o results/
 ```
 
+**A staphylococcus.** Species, ST, SCCmec type and resistance in one pass — nothing
+needs to be told it is a staphylococcus.
+
+```bash
+hydra run -a mrsa.fasta -o results/          # SCCmec type II(2A), ST5, ...
+```
+
 **Linezolid heteroresistance from 23S allele fractions.**
 
 ```bash
@@ -128,6 +135,8 @@ version, command and databases used.
 | **MLST** | every installed PubMLST scheme searched at once, scheme chosen automatically |
 | **Species** | Mash sketches and the MLST result combined; separates *K. variicola* and *K. quasipneumoniae* from *K. pneumoniae* |
 | **Lineage** | yersiniabactin, colibactin, aerobactin, salmochelin, *rmp*, *wzi*, *E. coli* serotyping, pathovar markers |
+| **SCCmec** | cassette type for staphylococci, from whole-element references (types I–XIII) |
+| **Broken genes** | *mgrB*, *ompK35/36*, *cirA*, *ramR* — where losing a gene is the resistance mechanism, not gaining one |
 | **Scores** | 0–5 virulence and 0–3 resistance, generalised to any Gram-negative |
 
 ## Validation
@@ -168,6 +177,38 @@ measured EUCAST result:
 |---|---|---|---|---|
 | **Hydra** | **0.440** | 0.973 | **0.706** | **56** |
 | Kleborate 3.2.4 | 0.360 | 0.973 | 0.666 | 64 |
+
+### Typing that depends on the organism
+
+Some answers are not allele profiles. SCCmec is a cassette that is either there or
+not, so the measurement is coverage of a whole reference element. On strains with
+published types — and none of them in the reference database, which would make the
+test circular:
+
+| Genome | Published | Hydra |
+|---|---|---|
+| N315 | SCCmec II | **II(2A)** |
+| USA300_FPR3757 | SCCmec IV | **IV(2B)** |
+| NCTC 8325 | none, MSSA | **none** |
+| Newman | none, MSSA | **none** |
+
+A methicillin-susceptible genome still covers 21% of the nearest reference — the
+*orfX* flank every *S. aureus* carries — against 98–100% for a real cassette, so the
+floor sits in the middle of that gap. The scheme runs only for staphylococci.
+
+### Genes whose loss is the mechanism
+
+Most resistance is a gene arriving; some is a gene breaking, and a screen that
+reports what it finds intact reports nothing. Hydra detects the disruption itself for
+*mgrB* (colistin), *ompK35* and *ompK36* (carbapenem, porin loss), *cirA*
+(cefiderocol) and *ramR* (tigecycline).
+
+This finds structural disruption — a frameshift or an inserted element breaks the
+reading frame and truncates the alignment. On 300 closed genomes it recovers 28 of
+the 44 events AMRFinderPlus reports, where the previous release found none of them.
+The 16 it does not are clean nonsense substitutions: a single premature stop leaves
+the DNA aligning full length, so coverage cannot see it and the catalogued-mutation
+path is what finds those.
 
 ### Heteroresistance
 

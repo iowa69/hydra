@@ -35,6 +35,10 @@ class DbSpec:
     default_coverage: float | None = None
     #: Databases in the "standard" preset.
     standard: bool = False
+    #: A nucleotide database that is not an acquired-gene database. SCCmec
+    #: references are whole cassettes: they belong to `hydra run`'s typing step,
+    #: not to `-d all`, where they would report a 30 kb element as a gene hit.
+    typing_only: bool = False
     aliases: tuple[str, ...] = field(default_factory=tuple)
     notes: str = ""
 
@@ -150,6 +154,15 @@ _register(DbSpec(
           "Hydra's generic per-species virulence and resistance scoring rules.",
 ))
 _register(DbSpec(
+    name="sccmec", kind="nucl", title="SCCmec cassette reference elements",
+    element_type="TYPING", typing_only=True,
+    url="https://bitbucket.org/genomicepidemiology/sccmecfinder_db/get/HEAD.tar.gz",
+    citation="Kaya et al. 2018, mSphere 3:e00612-17", licence="Apache 2.0",
+    aliases=("sccmec_finder",),
+    notes="Whole-cassette references for SCCmec types I-XIII. Used by the typing "
+          "step for staphylococci, not by gene screening.",
+))
+_register(DbSpec(
     name="species", kind="sketch", title="Species identification sketches",
     element_type="TYPING", conda_env_hint=("klebo", "kleborate"),
     conda_rel_path="lib/*/site-packages/kleborate/modules/enterobacterales__species/data",
@@ -162,11 +175,11 @@ _register(DbSpec(
 
 #: Convenience groups usable anywhere a database name is accepted.
 DB_GROUPS: dict[str, tuple[str, ...]] = {
-    "all": tuple(n for n, s in DATABASES.items() if s.kind in ("nucl", "prot")),
-    "standard": tuple(n for n, s in DATABASES.items() if s.standard and s.kind in ("nucl", "prot")),
+    "all": tuple(n for n, s in DATABASES.items() if s.kind in ("nucl", "prot") and not s.typing_only),
+    "standard": tuple(n for n, s in DATABASES.items() if s.standard and s.kind in ("nucl", "prot") and not s.typing_only),
     "amr": ("ncbi", "card", "resfinder", "argannot", "megares"),
     "virulence": ("vfdb", "ecoli_vf"),
-    "nucl": tuple(n for n, s in DATABASES.items() if s.kind == "nucl"),
+    "nucl": tuple(n for n, s in DATABASES.items() if s.kind == "nucl" and not s.typing_only),
     "core": ("ncbi", "vfdb"),
 }
 

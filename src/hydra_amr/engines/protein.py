@@ -23,23 +23,55 @@ from .mutations import MutationCatalog, evaluate, multi_residue, walk_alignment
 from .nucl import QueryBatch
 
 
+#: The K. pneumoniae species complex, where every rule below is established.
+_KPSC = {"Klebsiella_pneumoniae", "Klebsiella_oxytoca",
+         "Klebsiella_variicola", "Klebsiella_quasipneumoniae"}
+
 #: Genes whose *loss* confers resistance, scoped to the organisms where that is
-#: established. Reporting mgrB disruption for an organism that has no mgrB, or whose
-#: colistin resistance works another way, would be inventing a result.
+#: established, with the drug class each carries in the AMRFinderPlus catalogue.
+#: Reporting one of these for an organism that does not have the gene, or whose
+#: resistance to that drug works another way, would be inventing a result.
 LOSS_OF_FUNCTION: dict[str, dict] = {
+    # mgrB represses PhoPQ; losing it is the commonest route to colistin resistance
+    # in K. pneumoniae. 47 residues, so a modest identity floor is enough -- it has
+    # no close paralogue to be confused with.
     "mgrB": {
-        "organisms": {"Klebsiella_pneumoniae", "Klebsiella_oxytoca",
-                      "Klebsiella_variicola", "Klebsiella_quasipneumoniae"},
-        "class": "COLISTIN",
-        "subclass": "COLISTIN",
-        #: At or above this the gene is intact and says nothing.
-        "intact_coverage": 90.0,
-        #: Below this it is not a credible alignment to a 47-residue protein.
-        "min_partial_coverage": 20.0,
-        #: A short alignment to a 47-residue protein needs to be a good one.
-        "min_identity": 80.0,
+        "organisms": _KPSC, "class": "COLISTIN", "subclass": "COLISTIN",
+        "intact_coverage": 90.0, "min_partial_coverage": 20.0, "min_identity": 80.0,
+    },
+    # The porins. Losing either raises the beta-lactam and carbapenem MIC, and with a
+    # carbapenemase present that is the difference between susceptible and not.
+    #
+    # These need a high identity floor, unlike mgrB: ompK35 and ompK36 are homologous
+    # (~58% identical) and each aligns to the other's reference over its full length.
+    # At an 80% floor a paralogous full-length hit masks a real truncation, and both
+    # genes read as intact in every genome.
+    "ompK35": {
+        "organisms": _KPSC, "class": "CARBAPENEM", "subclass": "CARBAPENEM",
+        "intact_coverage": 90.0, "min_partial_coverage": 20.0, "min_identity": 90.0,
+    },
+    "ompK36": {
+        "organisms": _KPSC, "class": "CARBAPENEM", "subclass": "CARBAPENEM",
+        "intact_coverage": 90.0, "min_partial_coverage": 20.0, "min_identity": 90.0,
+    },
+    # cirA imports cefiderocol on its iron-siderophore route; without it the drug
+    # does not get in.
+    "cirA": {
+        "organisms": _KPSC, "class": "CEFIDEROCOL", "subclass": "CEFIDEROCOL",
+        "intact_coverage": 90.0, "min_partial_coverage": 20.0, "min_identity": 90.0,
+    },
+    # nfsB is the nitroreductase that activates nitrofurantoin.
+    "nfsB": {
+        "organisms": _KPSC, "class": "NITROFURAN", "subclass": "NITROFURANTOIN",
+        "intact_coverage": 90.0, "min_partial_coverage": 20.0, "min_identity": 90.0,
+    },
+    # ramR represses ramA; losing it derepresses the AcrAB efflux pump.
+    "ramR": {
+        "organisms": _KPSC, "class": "TIGECYCLINE", "subclass": "TIGECYCLINE",
+        "intact_coverage": 90.0, "min_partial_coverage": 20.0, "min_identity": 90.0,
     },
 }
+
 
 
 def loss_of_function_call(gene: str, organism: str | None,
@@ -157,6 +189,14 @@ class ProteinScreener:
                 continue
             piece = batch.id_map.get(hsp.qseqid)
             if piece is None:
+                continue
+            # Reject paralogues before choosing the best alignment, not after.
+            # ompK35 and ompK36 each align to the other's reference over its full
+            # length at ~58% identity, so picking the longest hit first and checking
+            # identity afterwards lets the paralogue win: the real gene's truncated
+            # 75% hit is discarded in favour of a 105% one that is a different gene,
+            # and the locus reads as intact in every genome.
+            if hsp.pident < LOSS_OF_FUNCTION[gene]["min_identity"]:
                 continue
             coverage = 100.0 * (abs(hsp.send - hsp.sstart) + 1) / hsp.slen
             key = (piece.sample, gene)
