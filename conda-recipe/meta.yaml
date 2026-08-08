@@ -98,7 +98,7 @@ about:
   home: https://github.com/iowa69/hydra
   license: MIT
   license_family: MIT
-  license_file: ../LICENSE
+  license_file: LICENSE
   summary: Unified AMR, virulence, point-mutation, heteroresistance, MLST and lineage typing
   description: |
     Hydra screens bacterial assemblies and raw reads for acquired resistance and
