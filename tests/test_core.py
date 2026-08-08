@@ -1260,3 +1260,32 @@ def test_db_update_reports_failures_and_leaves_the_rest_alone():
 def test_db_update_with_nothing_installed_says_so():
     from hydra_amr.cli import _update
     assert _update(_StubUpdateStore({}), _update_args()) == 1
+
+
+def test_report_overlaps_keeps_a_hit_contained_inside_another():
+    """--report-overlaps says every overlapping hit, and a contained hit is one.
+
+    Overlap is measured against a hit's own length, so any fraction <= 1.0 still
+    discards the contained one. PlasmidFinder's Col replicons are ~120 bp and
+    near-identical: Col(pHAD28) sits wholly inside ColRNAI at the same locus, and
+    abricate reports both.
+    """
+    from hydra_amr.engines.blast import deduplicate
+    # (span, gene) - the second is entirely inside the first.
+    hits = [((100, 231), "ColRNAI"), ((115, 231), "Col(pHAD28)")]
+    kept = deduplicate(
+        hits, key_span=lambda h: h[0], key_seq=lambda h: "contig1",
+        key_score=lambda h: 1.0, overlap_fraction=1.0)
+    # At 1.0 the contained hit is still dropped -- which is why the screen path
+    # cannot simply raise the fraction and must skip de-duplication instead.
+    assert [g for _, g in kept] == ["ColRNAI"]
+
+
+def test_dedup_still_collapses_one_locus_reported_as_two_alleles():
+    """The default path must keep folding blaTEM-1A/blaTEM-1B into one call."""
+    from hydra_amr.engines.blast import deduplicate
+    hits = [((100, 900), "blaTEM-1A"), ((100, 900), "blaTEM-1B")]
+    kept = deduplicate(
+        hits, key_span=lambda h: h[0], key_seq=lambda h: "contig1",
+        key_score=lambda h: 1.0, key_tiebreak=lambda h: h[1], overlap_fraction=0.5)
+    assert len(kept) == 1

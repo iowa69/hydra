@@ -179,17 +179,37 @@ class NucleotideScreener:
         for sample, entries in per_sample.items():
             # Deduplicate on true contig coordinates: chunking can surface the same
             # locus twice when it falls inside the overlap between two chunks.
-            entries = deduplicate(
-                entries,
-                key_span=lambda e: (e[0].query_start + e[1].get("offset", 0),
-                                    e[0].query_end + e[1].get("offset", 0)),
-                key_seq=lambda e: e[1]["contig"],
-                key_score=lambda e: (round(e[0].match_score, 4), round(e[0].identity_pct, 4),
-                                     e[0].bitscore),
-                key_tiebreak=lambda e: natural_key(e[1].get("gene", "")),
-                overlap_fraction=1.0 if self.config.report_overlaps
-                else self.config.overlap_fraction,
-            )
+            span_of = (lambda e: (e[0].query_start + e[1].get("offset", 0),
+                                  e[0].query_end + e[1].get("offset", 0)))
+            if self.config.report_overlaps:
+                # --report-overlaps means every overlapping hit, including one that
+                # falls entirely inside another. Overlap is measured against a hit's
+                # own length, so any fraction <= 1.0 still discards the contained
+                # one: PlasmidFinder's Col replicons are ~120 bp and near-identical,
+                # and Col(pHAD28) sits wholly inside ColRNAI at the same locus.
+                #
+                # Only exact repeats are dropped, which is the other thing this
+                # de-duplication is for: a locus lying in the seam between two
+                # chunks is found twice and is one hit, not two.
+                seen: set = set()
+                unique = []
+                for entry in entries:
+                    key = (entry[1]["contig"], span_of(entry), entry[1].get("gene", ""))
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    unique.append(entry)
+                entries = unique
+            else:
+                entries = deduplicate(
+                    entries,
+                    key_span=span_of,
+                    key_seq=lambda e: e[1]["contig"],
+                    key_score=lambda e: (round(e[0].match_score, 4),
+                                         round(e[0].identity_pct, 4), e[0].bitscore),
+                    key_tiebreak=lambda e: natural_key(e[1].get("gene", "")),
+                    overlap_fraction=self.config.overlap_fraction,
+                )
             hits: list[Hit] = []
             for merged_hit, meta in entries:
                 partial = merged_hit.coverage_pct < thresholds.partial_coverage
