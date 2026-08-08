@@ -204,11 +204,23 @@ reports what it finds intact reports nothing. Hydra detects the disruption itsel
 (cefiderocol) and *ramR* (tigecycline).
 
 This finds structural disruption — a frameshift or an inserted element breaks the
-reading frame and truncates the alignment. On 300 closed genomes it recovers 28 of
-the 44 events AMRFinderPlus reports, where the previous release found none of them.
-The 16 it does not are clean nonsense substitutions: a single premature stop leaves
-the DNA aligning full length, so coverage cannot see it and the catalogued-mutation
-path is what finds those.
+reading frame and truncates the alignment. Across the 667 closed genomes it recovers
+**97 of the 134** loss-of-function events AMRFinderPlus reports, where the previous
+release found none of them, and calls 4 that AMRFinderPlus does not.
+
+| Gene | found | missed |
+|---|---|---|
+| *ompK35* | 59 | 8 |
+| *cirA* | 12 | 3 |
+| *ramR* | 11 | 6 |
+| *ompK36* | 7 | 5 |
+| *mgrB* | 6 | 4 |
+| *nfsB* | 2 | 11 |
+
+The ones it misses are mostly clean nonsense substitutions, and *nfsB* shows why: a
+single premature stop leaves the DNA aligning over its full length, so coverage
+cannot see it. Structural disruption is what this measures; a catalogued point
+mutation is what the mutation caller is for.
 
 ### Heteroresistance
 
