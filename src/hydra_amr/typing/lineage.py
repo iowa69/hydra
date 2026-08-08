@@ -126,6 +126,37 @@ def _load_profiles(path: Path) -> SchemeProfile:
     return SchemeProfile(loci, table, lineage, lineage_column)
 
 
+#: `delete_rmpA_1` ... `delete_rmpA_52` are 52 near-identical truncation variants of
+#: one marker, not 52 markers. Serotype antigens (O121, H7) carry no underscore and
+#: are never touched by this.
+_MARKER_VARIANT = re.compile(r"^(?P<stem>.+?)_\d+$")
+
+
+def _marker_stem(name: str) -> str:
+    match = _MARKER_VARIANT.match(name)
+    return match.group("stem") if match else name
+
+
+def _best_per_marker(groups: list) -> list:
+    """Collapse numbered variants of one marker to the best-scoring allele.
+
+    Only collapses where a stem is shared by more than one key: a marker that
+    happens to end in a number keeps its own name.
+    """
+    by_stem: dict = {}
+    for key, value in groups:
+        by_stem.setdefault(_marker_stem(key), []).append((key, value))
+    out = []
+    for stem, members in by_stem.items():
+        if len(members) == 1:
+            out.append(members[0])
+        else:
+            # value is (allele, identity, coverage)
+            out.append(max(members, key=lambda kv: (kv[1][1], kv[1][2])))
+    return sorted(out, key=lambda kv: _marker_sort_key(kv[0]))
+
+
+
 class LineageTyper:
     """Types every installed lineage scheme in a single BLAST pass."""
 
@@ -255,8 +286,11 @@ class LineageTyper:
                 else:
                     # The allele is the answer: a marker scheme names its
                     # alleles after the marker, a single-locus scheme such as
-                    # wzi numbers them.
-                    call = "/".join(str(value[0]) for _key, value in groups)
+                    # wzi numbers them. Numbered variants of one marker collapse
+                    # to their best allele -- rmpA2's scheme holds 52 truncation
+                    # variants of a single marker, and joining them all produced
+                    # a 700-character cell that named nothing.
+                    call = "/".join(str(value[0]) for _key, value in _best_per_marker(groups))
                 lineage = "-"
             present = sum(1 for value in alleles.values() if value != "-")
             out.append(TypingResult(scheme=label, call=call, lineage=lineage or "-",

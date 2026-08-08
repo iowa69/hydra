@@ -1289,3 +1289,28 @@ def test_dedup_still_collapses_one_locus_reported_as_two_alleles():
         hits, key_span=lambda h: h[0], key_seq=lambda h: "contig1",
         key_score=lambda h: 1.0, key_tiebreak=lambda h: h[1], overlap_fraction=0.5)
     assert len(kept) == 1
+
+
+def test_numbered_variants_of_one_marker_collapse_to_their_best_allele():
+    """rmpA2's scheme holds 52 truncation variants of a single marker.
+
+    Joining them all produced a 700-character cell naming nothing, on 24 of 667
+    genomes. One marker gets one call: the best-scoring variant.
+    """
+    from hydra_amr.typing.lineage import _best_per_marker, _marker_stem
+    assert _marker_stem("delete_rmpA_12") == "delete_rmpA"
+    groups = [(f"delete_rmpA_{i}", (f"allele{i}", 90.0 + i, 100.0)) for i in range(1, 6)]
+    collapsed = _best_per_marker(groups)
+    assert len(collapsed) == 1
+    assert collapsed[0][1][0] == "allele5"          # highest identity wins
+
+
+def test_distinct_markers_are_not_collapsed_together():
+    """ybtS and ybtX are different markers and must both be reported."""
+    from hydra_amr.typing.lineage import _best_per_marker, _marker_stem
+    groups = [("ybtS", ("ybtS", 99.0, 100.0)), ("ybtX", ("ybtX", 98.0, 100.0)),
+              ("irp2", ("irp2", 97.0, 100.0))]
+    assert len(_best_per_marker(groups)) == 3
+    # A serotype antigen carries no underscore and is never rewritten.
+    assert _marker_stem("O121") == "O121"
+    assert _marker_stem("H7") == "H7"
