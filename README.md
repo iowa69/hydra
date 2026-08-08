@@ -39,6 +39,30 @@ hydra db check        # reports anything missing
 
 Databases live in `$HYDRA_DB`, default `~/.hydra/db`.
 
+### Keeping the databases current
+
+Hydra never reaches the network on its own. A database that changes underneath a
+study changes its results — two isolates screened a week apart should be comparable,
+and quietly pulling a new CARD release between them means they are not. Updating is
+therefore a command you run, not something that happens to you.
+
+```bash
+hydra db update --dry-run     # what would change, and when each was installed
+hydra db update               # refresh every installed database from upstream
+hydra db update card ncbi     # or just these
+```
+
+```
+database         installed              action
+card             2026-08-05 12:58:12    would be refreshed
+ncbi             2026-08-05 12:57:58    would be refreshed
+pubmlst          2026-08-05 13:02:27    would be refreshed
+-- megares: no automatic source; use 'hydra db import --force'
+```
+
+Each database is replaced on its own, so a source that is unreachable leaves every
+other one exactly as it was rather than a store stranded between two releases.
+
 ## Examples
 
 ### One isolate, everything on
@@ -254,7 +278,7 @@ Every comparator, threshold and sample: **[docs/VALIDATION.md](docs/VALIDATION.m
 ```
 hydra run       full analysis of assemblies and/or reads
 hydra screen    acquired-gene screening only, as a flat gene table
-hydra db        list | import | download | bundle | info | check | remove
+hydra db        list | import | download | update | bundle | info | check | remove
 hydra presets   list the available presets
 ```
 

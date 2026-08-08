@@ -701,6 +701,9 @@ def cmd_db(args) -> int:
     if action == "download":
         return _download(store, args)
 
+    if action == "update":
+        return _update(store, args)
+
     if action == "bundle":
         return _bundle(store, args)
 
@@ -857,6 +860,68 @@ def _fetch_databases(store: DatabaseStore, fetchable: list[str], asked: list[str
     return 0
 
 
+
+def _update(store: DatabaseStore, args) -> int:
+    """Refresh installed databases from their upstream sources.
+
+    Never runs on its own. Hydra will not reach the network unless asked, because a
+    database that changes underneath a running study changes its results: two
+    isolates screened a week apart should be comparable, and silently pulling a new
+    CARD release between them means they are not. Updating is a decision, so it is a
+    command.
+
+    Only databases that are already installed and have an automatic source are
+    touched. Anything imported from a local conda environment is left alone -- its
+    source is that environment, and `hydra db import --force` is what refreshes it.
+    """
+    installed = store.installed()
+    if not installed:
+        print(f"no databases installed in {store.root}\n\n"
+              f"Install them first with:  hydra db download")
+        return 1
+
+    wanted = resolve_names(args.names) if args.names else sorted(installed)
+    refreshable, skipped = [], []
+    for name in wanted:
+        if name not in installed:
+            skipped.append((name, "not installed"))
+        elif not can_fetch(name):
+            skipped.append((name, "no automatic source; use 'hydra db import --force'"))
+        else:
+            refreshable.append(name)
+
+    for name, why in skipped:
+        print(f"-- {name}: {why}")
+    if not refreshable:
+        print("\nnothing to update")
+        return 0
+
+    print(f"{'database':16s} {'installed':22s} {'action'}")
+    for name in refreshable:
+        entry = installed.get(name, {})
+        stamp = entry.get("installed") or entry.get("version") or "unknown"
+        print(f"{name:16s} {str(stamp)[:22]:22s} "
+              f"{'would be refreshed' if args.dry_run else 'refreshing'}")
+    if args.dry_run:
+        print(f"\n{len(refreshable)} database(s) would be refreshed. "
+              f"Run without --dry-run to do it.")
+        return 0
+
+    # Replace one at a time. A failure part-way leaves every other database as it
+    # was rather than a store half-way between two releases.
+    failed = []
+    for name in refreshable:
+        try:
+            store.download(name, force=True)
+            print(f"ok {name}: refreshed")
+        except HydraError as exc:
+            failed.append(name)
+            LOG.error("%s: %s", name, exc)
+    print(f"\n{len(refreshable) - len(failed)} refreshed, {len(failed)} failed")
+    if failed:
+        print("the databases that failed are unchanged, not half-written")
+    return 1 if failed else 0
+
 def _bundle(store: DatabaseStore, args) -> int:
     names = resolve_names(args.names) if args.names else None
     output = Path(args.output)
@@ -989,6 +1054,7 @@ def build_parser() -> argparse.ArgumentParser:
         ("list", "show installed databases"),
         ("import", "build databases from local conda environments or a directory"),
         ("download", "install a prebuilt bundle, or show where the sources live"),
+        ("update", "refresh installed databases from upstream (never automatic)"),
         ("bundle", "pack the installed databases into a portable archive"),
         ("info", "show details for one or more databases"),
         ("check", "verify installed databases are usable"),
@@ -1012,6 +1078,9 @@ def build_parser() -> argparse.ArgumentParser:
                                   "downloading nothing")
             sub.add_argument("--force", action="store_true",
                              help="replace databases that are already installed")
+        if action == "update":
+            sub.add_argument("--dry-run", action="store_true",
+                             help="list what would be refreshed and change nothing")
         if action == "bundle":
             sub.add_argument("-o", "--output", type=Path, default=Path("hydra-db.tar.gz"),
                              metavar="ARCHIVE", help="archive to write (default: hydra-db.tar.gz)")

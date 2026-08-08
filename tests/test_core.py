@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -1205,3 +1206,57 @@ def test_below_the_coverage_floor_is_reported_as_absent_not_as_a_type():
                        {"ref1": {"gene": "II(2A)", "accession": "D86934.2"}})
     assert call.call == "II(2A)"
     assert "D86934.2" in call.note
+
+
+class _StubUpdateStore:
+    """A store whose downloads are recorded rather than performed."""
+
+    def __init__(self, installed, fail=()):
+        self.root = Path("/tmp/nowhere")
+        self._installed = dict(installed)
+        self._fail = set(fail)
+        self.downloaded = []
+
+    def installed(self):
+        return self._installed
+
+    def download(self, name, force=False):
+        if name in self._fail:
+            raise HydraError(f"{name} is unreachable")
+        self.downloaded.append((name, force))
+
+
+def _update_args(names=(), dry_run=False):
+    return SimpleNamespace(names=list(names), dry_run=dry_run)
+
+
+def test_db_update_never_runs_on_its_own_and_dry_run_changes_nothing():
+    """Updating is a decision. A database that changes underneath a study changes
+    its results, so Hydra only reaches the network when asked."""
+    from hydra_amr.cli import _update
+    store = _StubUpdateStore({"ncbi": {"installed": "2026-01-01"},
+                              "card": {"installed": "2026-01-01"}})
+    assert _update(store, _update_args(dry_run=True)) == 0
+    assert store.downloaded == []
+
+
+def test_db_update_refreshes_only_what_has_an_upstream_source():
+    """A database imported from a local conda environment has no upstream to poll;
+    saying so beats failing on it."""
+    from hydra_amr.cli import _update
+    store = _StubUpdateStore({"ncbi": {}, "megares": {}})   # megares: import-only
+    assert _update(store, _update_args()) == 0
+    assert [n for n, _ in store.downloaded] == ["ncbi"]
+    assert all(force for _, force in store.downloaded)
+
+
+def test_db_update_reports_failures_and_leaves_the_rest_alone():
+    from hydra_amr.cli import _update
+    store = _StubUpdateStore({"ncbi": {}, "card": {}}, fail={"card"})
+    assert _update(store, _update_args()) == 1
+    assert [n for n, _ in store.downloaded] == ["ncbi"]
+
+
+def test_db_update_with_nothing_installed_says_so():
+    from hydra_amr.cli import _update
+    assert _update(_StubUpdateStore({}), _update_args()) == 1
