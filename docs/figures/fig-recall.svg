@@ -19,7 +19,7 @@
 
 <rect class="bg" width="820" height="383" rx="8"/>
 <text class="ttl" x="24" y="32">Everything abricate finds, Hydra finds</text>
-<text class="sub" x="24" y="52">667 closed genomes, one database per run - 123 gene instances missed in total, 0.18 per genome</text>
+<text class="sub" x="24" y="52">667 closed genomes, nine databases, 120,380 gene calls - one not matched</text>
 <line class="rule" x1="168.0" y1="74" x2="168.0" y2="339"/>
 <text class="cap" x="168.0" y="68" text-anchor="middle">99%</text>
 <line class="rule" x1="282.0" y1="74" x2="282.0" y2="339"/>
@@ -38,33 +38,33 @@
 <rect x="168" y="117" width="456.0" height="15" rx="3" fill="#10b981" opacity="0.92"/>
 <text class="val" x="638" y="129">100.00%</text>
 <text class="mut" x="700" y="129">0 missed</text>
-<text class="lbl" x="24" y="158">VFDB</text>
+<text class="lbl" x="24" y="158">ResFinder</text>
 <rect x="168" y="146" width="456.0" height="15" rx="3" fill="#10b981" opacity="0.92"/>
 <text class="val" x="638" y="158">100.00%</text>
 <text class="mut" x="700" y="158">0 missed</text>
-<text class="lbl" x="24" y="187">PlasmidFinder</text>
+<text class="lbl" x="24" y="187">ARG-ANNOT</text>
 <rect x="168" y="175" width="456.0" height="15" rx="3" fill="#10b981" opacity="0.92"/>
 <text class="val" x="638" y="187">100.00%</text>
 <text class="mut" x="700" y="187">0 missed</text>
-<text class="lbl" x="24" y="216">ecoh</text>
+<text class="lbl" x="24" y="216">MEGARes</text>
 <rect x="168" y="204" width="456.0" height="15" rx="3" fill="#10b981" opacity="0.92"/>
 <text class="val" x="638" y="216">100.00%</text>
 <text class="mut" x="700" y="216">0 missed</text>
-<text class="lbl" x="24" y="245">ARG-ANNOT</text>
-<rect x="168" y="233" width="442.3" height="15" rx="3" fill="#10b981" opacity="0.92"/>
-<text class="val" x="638" y="245">99.97%</text>
-<text class="mut" x="700" y="245">2 missed</text>
-<text class="lbl" x="24" y="274">MEGARes</text>
-<rect x="168" y="262" width="383.0" height="15" rx="3" fill="#3b82f6" opacity="0.92"/>
-<text class="val" x="638" y="274">99.84%</text>
-<text class="mut" x="700" y="274">35 missed</text>
-<text class="lbl" x="24" y="303">ResFinder</text>
-<rect x="168" y="291" width="291.8" height="15" rx="3" fill="#3b82f6" opacity="0.92"/>
-<text class="val" x="638" y="303">99.64%</text>
-<text class="mut" x="700" y="303">16 missed</text>
-<text class="lbl" x="24" y="332">E. coli VF</text>
-<rect x="168" y="320" width="205.2" height="15" rx="3" fill="#3b82f6" opacity="0.92"/>
-<text class="val" x="638" y="332">99.45%</text>
-<text class="mut" x="700" y="332">70 missed</text>
-<text class="cap" x="24" y="371">axis starts at 99% - CARD compared on the 5902 gene names both copies contain</text>
+<text class="lbl" x="24" y="245">VFDB</text>
+<rect x="168" y="233" width="456.0" height="15" rx="3" fill="#10b981" opacity="0.92"/>
+<text class="val" x="638" y="245">100.00%</text>
+<text class="mut" x="700" y="245">0 missed</text>
+<text class="lbl" x="24" y="274">E. coli VF</text>
+<rect x="168" y="262" width="456.0" height="15" rx="3" fill="#10b981" opacity="0.92"/>
+<text class="val" x="638" y="274">100.00%</text>
+<text class="mut" x="700" y="274">0 missed</text>
+<text class="lbl" x="24" y="303">ecoh</text>
+<rect x="168" y="291" width="456.0" height="15" rx="3" fill="#10b981" opacity="0.92"/>
+<text class="val" x="638" y="303">100.00%</text>
+<text class="mut" x="700" y="303">0 missed</text>
+<text class="lbl" x="24" y="332">PlasmidFinder</text>
+<rect x="168" y="320" width="437.8" height="15" rx="3" fill="#10b981" opacity="0.92"/>
+<text class="val" x="638" y="332">99.96%</text>
+<text class="mut" x="700" y="332">1 missed</text>
+<text class="cap" x="24" y="371">same database, same thresholds, same overlap reporting; matched on locus, not on label</text>
 </svg>

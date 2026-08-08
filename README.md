@@ -20,7 +20,7 @@
 ---
 
 **5375 *Klebsiella* samples: 100% of 2933 sequence types matched the recorded answer,
-99.89% gene recall against abricate across nine databases, and the whole job in
+100% gene recall against abricate across nine databases, and the whole job in
 11.7 s a genome against 18.1 s for the four tools it replaces.**
 
 <p align="center"><img src="docs/figures/fig-example.svg" alt="One command, one table" width="820"></p>
@@ -63,12 +63,66 @@ hydra run -a isolate.fasta -o results/
   results/hydra.html          self-contained report with clustered heatmaps
 ```
 
-One line per isolate in `hydra.summary.tsv`:
+### What comes back
+
+**`hydra.summary.tsv` — one line per isolate, everything on it.** Species and how it
+was decided, sequence type with the allele profile, capsule marker, counts by
+category, the scores, and assembly QC:
 
 ```
-sample      species                 confidence  scheme      ST   amr_genes  virulence  replicons  score  esbl
-DRR199175   Klebsiella pneumoniae   strong      klebsiella  101  46         93         5          1      True
+sample                ERR11578019
+species               Klebsiella pneumoniae        species_confidence   strong
+species_evidence      MLST scheme klebsiella (7/7 exact loci); Mash Klebsiella pneumoniae
+mlst_scheme           klebsiella                   ST                   3419
+mlst_profile          gapA(3) infB(1) mdh(1) pgi(26) phoE(4) rpoB(4) tonB(39)
+wzi                   178                          organism_db          Klebsiella_pneumoniae
+amr_genes             42                           amr_classes          8
+virulence_genes       82                           stress_genes         32
+plasmid_replicons     3                            point_mutations      0
+resistance_score      1                            virulence_score      1
+has_esbl              True                         has_carbapenemase    False
+qc_contigs            3    qc_n50  5228768    qc_total_length  5457457    qc_gc  57.29
 ```
+
+Alongside it, for *Klebsiella*: `ybST` yersiniabactin, `cbST` colibactin, `AbST`
+aerobactin, `SmST` salmochelin, `RmST`/`rmpA2` hypermucoidy, `wzi` capsule — and for
+staphylococci, `SCCmec`. All in `hydra.typing.tsv`.
+
+**`hydra.tsv` — one row per element**, whatever kind it is. Acquired genes, stress
+and virulence elements, plasmid replicons, point mutations and read-derived variants
+all share one schema, so nothing needs a second parser:
+
+```
+sample        database       element_type  subtype     gene         class                %cov    %id
+DRR199175     card           AMR           AMR         ArnT                              100.0   99.52
+ERR1015312    protein        AMR           POINT       ramR         TETRACYCLINE         100.0   98.97
+ERR10447218   protein        AMR           DISRUPTION  ramR         TIGECYCLINE           68.4   100.0
+DRR199175     plasmidfinder  PLASMID       REPLICON    Col440I_1                         100.0   96.49
+DRR199175     ecoli_vf       VIRULENCE     VIRULENCE   ECS88_3547                        100.0   90.06
+ERR1015312    protein        STRESS        BIOCIDE     qacEdelta1   QUATERNARY AMMONIUM  100.0   100.0
+DRR199175     protein        STRESS        METAL       fieF                              100.0   100.0
+ERR10447212   ecoh           SEROTYPE      SEROTYPE    wzm-O9                            100.0   96.31
+```
+
+An acquired gene, a catalogued point mutation, a gene found *disrupted*, a plasmid
+replicon, a virulence factor, a biocide and a metal resistance element, and a
+serotype marker — eight kinds of answer, one schema.
+
+Full schema: `sample database element_type element_subtype gene accession product
+class subclass sequence start end strand coverage coverage_pct identity_pct gaps
+depth allele_fraction method resolution primary note`.
+
+**`hydra.classes.tsv` — elements per drug class**, ready to pivot:
+
+```
+sample        AMINOGLYCOSIDE  BETA-LACTAM  BIOCIDE  COLISTIN  EFFLUX  FOSFOMYCIN
+ERR11578019   2               3            6        0         3       2
+```
+
+**`hydra.matrix.tsv`** is samples × genes presence/absence — or identity, coverage,
+depth or allele fraction with `--cell`. **`hydra.html`** is the same content as a
+self-contained report with clustered heatmaps. **`hydra.json`** carries all of it plus
+the version, the command and the databases that produced it.
 
 ### A directory of assemblies, for surveillance
 
@@ -182,7 +236,7 @@ reporting.
 | Sequence type vs the recorded answer, 2933 genomes | **2933 / 2933** | — |
 | Sequence type vs Kleborate 3.2.4 | **2933 / 2933** | 2933 / 2933 |
 | Sequence type vs `mlst` 2.35.0 | **99.85 – 100%** | 3 genomes it will not type, Hydra types |
-| Gene recall, nine databases, 667 genomes | **99.89%** | abricate 100% |
+| Gene recall, nine databases, 120,380 gene calls | **100.00%** | abricate 100% |
 | Distinct sequence types called | **539** | — |
 | Virulence score vs Kleborate | **99.45%** | reference |
 | Colistin, very major errors | **56** | Kleborate 64 |

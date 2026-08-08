@@ -54,7 +54,7 @@
 <rect x="728" y="254" width="53" height="16" rx="8" fill="#10b981"/><text class="badge" x="754.5" y="265" text-anchor="middle">AHEAD</text>
 <line class="rule" x1="24" y1="279" x2="796" y2="279"/>
 <text class="lbl" x="24" y="298">Gene recall, nine databases</text>
-<text class="val" x="300" y="298">99.89%</text>
+<text class="val" x="300" y="298">100.00%</text>
 <text class="mut" x="470" y="298">abricate 100%</text>
 <rect x="728" y="287" width="53" height="16" rx="8" fill="#3b82f6"/><text class="badge" x="754.5" y="298" text-anchor="middle">LEVEL</text>
 <line class="rule" x1="24" y1="312" x2="796" y2="312"/>
