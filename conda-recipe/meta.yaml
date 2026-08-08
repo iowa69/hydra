@@ -1,5 +1,5 @@
 {% set name = "hydra-amr" %}
-{% set version = "1.3.0" %}
+{% set version = "1.4.0" %}
 
 package:
   name: {{ name|lower }}
@@ -36,21 +36,63 @@ requirements:
     - mash >=2.3
 
 test:
+  # Every module, not just the packages: a missing submodule imports fine through
+  # its package and fails at the first run that needs it.
   imports:
     - hydra_amr
+    - hydra_amr.__main__
+    - hydra_amr.cli
+    - hydra_amr.config
+    - hydra_amr.pipeline
+    - hydra_amr.presets
+    - hydra_amr.records
+    - hydra_amr.seqio
+    - hydra_amr.utils
+    - hydra_amr.db
+    - hydra_amr.db.fetch
+    - hydra_amr.db.manager
+    - hydra_amr.db.registry
     - hydra_amr.engines
-    - hydra_amr.typing
+    - hydra_amr.engines.blast
+    - hydra_amr.engines.mutations
+    - hydra_amr.engines.nucl
+    - hydra_amr.engines.protein
+    - hydra_amr.engines.reads
     - hydra_amr.report
+    - hydra_amr.report.html
+    - hydra_amr.report.tables
+    - hydra_amr.report.writer
+    - hydra_amr.typing
+    - hydra_amr.typing.cassette
+    - hydra_amr.typing.lineage
+    - hydra_amr.typing.mlst
+    - hydra_amr.typing.species
   commands:
     - hydra --version
     - hydra --help
     - hydra run --help
     - hydra screen --help
     - hydra db --help
+    - hydra db download --list
     - hydra presets
+    - hydra presets deep
+    # The packaged data file the species/scheme mapping is read from. Without it
+    # every MLST scheme loses its organism and the species call degrades silently,
+    # which is exactly the kind of loss a package test should catch.
+    - python -c "import hydra_amr, pathlib, sys; p = pathlib.Path(hydra_amr.__file__).parent / 'data' / 'scheme_species.tsv'; sys.exit(0 if p.is_file() and p.stat().st_size > 0 else 1)"
+    # The rule tables that drive organism-scoped typing must survive packaging.
+    - python -c "from hydra_amr.typing.cassette import SCHEMES; assert 'SCCmec' in SCHEMES"
+    - python -c "from hydra_amr.engines.protein import LOSS_OF_FUNCTION as L; assert {'mgrB','ompK35','ompK36','cirA','ramR','nfsB'} <= set(L)"
+    - python -c "from hydra_amr.db.registry import DATABASES, DB_GROUPS; assert 'sccmec' in DATABASES and 'sccmec' not in DB_GROUPS['all']"
+    - python -c "from hydra_amr.presets import PRESETS; assert {'fast','standard','deep','surveillance','linezolid'} <= set(PRESETS)"
+    # The external tools Hydra shells out to, so a broken environment fails here
+    # rather than four stages into someone's first run.
     - blastn -version
+    - blastx -version
+    - makeblastdb -version
     - minimap2 --version
     - samtools --version
+    - mash --version
 
 about:
   home: https://github.com/iowa69/hydra
@@ -73,6 +115,12 @@ about:
     against every allele, and each resistance gene it carries is compared with
     the closest reference so its mutations are reported with the fraction of
     reads supporting them.
+
+    Typing follows the organism: SCCmec cassette type for staphylococci, MLST from
+    every installed PubMLST scheme with the scheme chosen automatically, and the
+    Klebsiella lineage loci. Where losing a gene is the resistance mechanism rather
+    than gaining one - mgrB and colistin, ompK35/ompK36 and the carbapenems, cirA,
+    ramR - the disruption itself is detected and reported.
 
     Acquired genes are screened against NCBI, CARD, ResFinder, ARG-ANNOT,
     MEGARes, VFDB, PlasmidFinder, EcOH and E. coli VF together, with curated

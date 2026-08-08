@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="396" viewBox="0 0 820 396" role="img" aria-label="One command, one table">
+
+  <style>
+    .bg    { fill: #ffffff; }
+    .ttl   { fill: #0f172a; font: 600 16px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .sub   { fill: #64748b; font: 400 12px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .lbl   { fill: #334155; font: 400 12.5px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .val   { fill: #0f172a; font: 600 12.5px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .mut   { fill: #64748b; font: 400 11.5px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .cap   { fill: #94a3b8; font: 400 11px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .badge { font: 700 10px system-ui, -apple-system, Segoe UI, sans-serif; fill: #ffffff; }
+    .rule  { stroke: #e2e8f0; stroke-width: 1; }
+    @media (prefers-color-scheme: dark) {
+      .bg   { fill: #0d1117; } .ttl { fill: #e6edf3; } .sub { fill: #8b949e; }
+      .lbl  { fill: #c9d1d9; } .val { fill: #e6edf3; } .mut { fill: #8b949e; }
+      .cap  { fill: #6e7681; } .rule { stroke: #21262d; }
+    }
+  </style>
+
+<rect class="bg" width="820" height="396" rx="8"/>
+<text class="ttl" x="24" y="32">One command, one table</text>
+<text class="sub" x="24" y="52">a finished K. pneumoniae genome - every value below came out of this run</text>
+<rect x="24" y="74" width="772" height="34" rx="6" fill="#0f172a"/>
+<text x="38" y="96" fill="#7dd3fc" style="font:600 13px ui-monospace,SFMono-Regular,Menlo,monospace">$ hydra run -a isolate.fasta -o results/</text>
+<rect x="24.0" y="142" width="248.0" height="62" rx="6" fill="#10b981" opacity="0.08"/>
+<rect x="24.0" y="142" width="3" height="62" rx="1.5" fill="#10b981"/>
+<text class="cap" x="38.0" y="161">SPECIES</text>
+<text x="38.0" y="183" class="ttl" style="font-size:17px">K. pneumoniae</text>
+<text class="mut" x="38.0" y="197">strong - sketch and scheme agree</text>
+<rect x="286.0" y="142" width="248.0" height="62" rx="6" fill="#10b981" opacity="0.08"/>
+<rect x="286.0" y="142" width="3" height="62" rx="1.5" fill="#10b981"/>
+<text class="cap" x="300.0" y="161">SEQUENCE TYPE</text>
+<text x="300.0" y="183" class="ttl" style="font-size:17px">ST101</text>
+<text class="mut" x="300.0" y="197">klebsiella scheme, 7/7 exact loci</text>
+<rect x="548.0" y="142" width="248.0" height="62" rx="6" fill="#10b981" opacity="0.08"/>
+<rect x="548.0" y="142" width="3" height="62" rx="1.5" fill="#10b981"/>
+<text class="cap" x="562.0" y="161">ACQUIRED AMR GENES</text>
+<text x="562.0" y="183" class="ttl" style="font-size:17px">46</text>
+<text class="mut" x="562.0" y="197">nine databases, de-duplicated</text>
+<rect x="24.0" y="218" width="248.0" height="62" rx="6" fill="#10b981" opacity="0.08"/>
+<rect x="24.0" y="218" width="3" height="62" rx="1.5" fill="#10b981"/>
+<text class="cap" x="38.0" y="237">VIRULENCE GENES</text>
+<text x="38.0" y="259" class="ttl" style="font-size:17px">93</text>
+<text class="mut" x="38.0" y="273">VFDB and the lineage loci</text>
+<rect x="286.0" y="218" width="248.0" height="62" rx="6" fill="#10b981" opacity="0.08"/>
+<rect x="286.0" y="218" width="3" height="62" rx="1.5" fill="#10b981"/>
+<text class="cap" x="300.0" y="237">PLASMID REPLICONS</text>
+<text x="300.0" y="259" class="ttl" style="font-size:17px">5</text>
+<text class="mut" x="300.0" y="273">PlasmidFinder</text>
+<rect x="548.0" y="218" width="248.0" height="62" rx="6" fill="#10b981" opacity="0.08"/>
+<rect x="548.0" y="218" width="3" height="62" rx="1.5" fill="#10b981"/>
+<text class="cap" x="562.0" y="237">RESISTANCE</text>
+<text x="562.0" y="259" class="ttl" style="font-size:17px">ESBL positive</text>
+<text class="mut" x="562.0" y="273">score 1 - no carbapenemase</text>
+<rect x="24.0" y="294" width="248.0" height="62" rx="6" fill="#10b981" opacity="0.08"/>
+<rect x="24.0" y="294" width="3" height="62" rx="1.5" fill="#10b981"/>
+<text class="cap" x="38.0" y="313">YERSINIABACTIN</text>
+<text x="38.0" y="335" class="ttl" style="font-size:17px">ybST 63</text>
+<text class="mut" x="38.0" y="349">ICEKp5, virulence score 1</text>
+<rect x="286.0" y="294" width="248.0" height="62" rx="6" fill="#10b981" opacity="0.08"/>
+<rect x="286.0" y="294" width="3" height="62" rx="1.5" fill="#10b981"/>
+<text class="cap" x="300.0" y="313">CAPSULE</text>
+<text x="300.0" y="335" class="ttl" style="font-size:17px">wzi 29</text>
+<text class="mut" x="300.0" y="349">K locus marker</text>
+<rect x="548.0" y="294" width="248.0" height="62" rx="6" fill="#10b981" opacity="0.08"/>
+<rect x="548.0" y="294" width="3" height="62" rx="1.5" fill="#10b981"/>
+<text class="cap" x="562.0" y="313">TIME</text>
+<text x="562.0" y="335" class="ttl" style="font-size:17px">11.7 s</text>
+<text class="mut" x="562.0" y="349">on 24 cores, everything above</text>
+<text class="cap" x="24" y="384">results/  ->  hydra.tsv  hydra.summary.tsv  hydra.matrix.tsv  hydra.classes.tsv  hydra.mlst.tsv  hydra.typing.tsv  hydra.json  hydra.html</text>
+</svg>
