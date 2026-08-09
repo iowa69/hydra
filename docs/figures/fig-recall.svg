@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="820" height="383" viewBox="0 0 820 383" role="img" aria-label="Everything abricate finds, Hydra finds">
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="409" viewBox="0 0 820 409" role="img" aria-label="Everything abricate finds, Hydra finds">
 
   <style>
     .bg    { fill: #ffffff; }
@@ -10,61 +10,67 @@
     .cap   { fill: #94a3b8; font: 400 11px system-ui, -apple-system, Segoe UI, sans-serif; }
     .badge { font: 700 10px system-ui, -apple-system, Segoe UI, sans-serif; fill: #ffffff; }
     .rule  { stroke: #e2e8f0; stroke-width: 1; }
+    .axis  { stroke: #cbd5e1; stroke-width: 1; }
     @media (prefers-color-scheme: dark) {
       .bg   { fill: #0d1117; } .ttl { fill: #e6edf3; } .sub { fill: #8b949e; }
       .lbl  { fill: #c9d1d9; } .val { fill: #e6edf3; } .mut { fill: #8b949e; }
-      .cap  { fill: #6e7681; } .rule { stroke: #21262d; }
+      .cap  { fill: #6e7681; } .rule { stroke: #21262d; } .axis { stroke: #30363d; }
     }
   </style>
 
-<rect class="bg" width="820" height="383" rx="8"/>
+<rect class="bg" width="820" height="409" rx="8"/>
 <text class="ttl" x="24" y="32">Everything abricate finds, Hydra finds</text>
-<text class="sub" x="24" y="52">667 closed genomes, nine databases, 120,380 gene calls - one not matched</text>
-<line class="rule" x1="168.0" y1="74" x2="168.0" y2="339"/>
-<text class="cap" x="168.0" y="68" text-anchor="middle">99%</text>
-<line class="rule" x1="282.0" y1="74" x2="282.0" y2="339"/>
-<text class="cap" x="282.0" y="68" text-anchor="middle">99.25%</text>
-<line class="rule" x1="396.0" y1="74" x2="396.0" y2="339"/>
-<text class="cap" x="396.0" y="68" text-anchor="middle">99.5%</text>
-<line class="rule" x1="510.0" y1="74" x2="510.0" y2="339"/>
-<text class="cap" x="510.0" y="68" text-anchor="middle">99.75%</text>
-<line class="rule" x1="624.0" y1="74" x2="624.0" y2="339"/>
-<text class="cap" x="624.0" y="68" text-anchor="middle">100%</text>
-<text class="lbl" x="24" y="100">NCBI</text>
-<rect x="168" y="88" width="456.0" height="15" rx="3" fill="#10b981" opacity="0.92"/>
-<text class="val" x="638" y="100">100.00%</text>
-<text class="mut" x="700" y="100">0 missed</text>
-<text class="lbl" x="24" y="129">CARD</text>
-<rect x="168" y="117" width="456.0" height="15" rx="3" fill="#10b981" opacity="0.92"/>
-<text class="val" x="638" y="129">100.00%</text>
-<text class="mut" x="700" y="129">0 missed</text>
-<text class="lbl" x="24" y="158">ResFinder</text>
-<rect x="168" y="146" width="456.0" height="15" rx="3" fill="#10b981" opacity="0.92"/>
-<text class="val" x="638" y="158">100.00%</text>
-<text class="mut" x="700" y="158">0 missed</text>
-<text class="lbl" x="24" y="187">ARG-ANNOT</text>
-<rect x="168" y="175" width="456.0" height="15" rx="3" fill="#10b981" opacity="0.92"/>
-<text class="val" x="638" y="187">100.00%</text>
-<text class="mut" x="700" y="187">0 missed</text>
-<text class="lbl" x="24" y="216">MEGARes</text>
-<rect x="168" y="204" width="456.0" height="15" rx="3" fill="#10b981" opacity="0.92"/>
-<text class="val" x="638" y="216">100.00%</text>
-<text class="mut" x="700" y="216">0 missed</text>
-<text class="lbl" x="24" y="245">VFDB</text>
-<rect x="168" y="233" width="456.0" height="15" rx="3" fill="#10b981" opacity="0.92"/>
-<text class="val" x="638" y="245">100.00%</text>
-<text class="mut" x="700" y="245">0 missed</text>
-<text class="lbl" x="24" y="274">E. coli VF</text>
-<rect x="168" y="262" width="456.0" height="15" rx="3" fill="#10b981" opacity="0.92"/>
-<text class="val" x="638" y="274">100.00%</text>
-<text class="mut" x="700" y="274">0 missed</text>
-<text class="lbl" x="24" y="303">ecoh</text>
-<rect x="168" y="291" width="456.0" height="15" rx="3" fill="#10b981" opacity="0.92"/>
-<text class="val" x="638" y="303">100.00%</text>
-<text class="mut" x="700" y="303">0 missed</text>
-<text class="lbl" x="24" y="332">PlasmidFinder</text>
-<rect x="168" y="320" width="437.8" height="15" rx="3" fill="#10b981" opacity="0.92"/>
-<text class="val" x="638" y="332">99.96%</text>
-<text class="mut" x="700" y="332">1 missed</text>
-<text class="cap" x="24" y="371">same database, same thresholds, same overlap reporting; matched on locus, not on label</text>
+<text class="sub" x="24" y="52">667 closed genomes, nine databases, 127,748 gene calls compared</text>
+<line class="rule" x1="132.0" y1="82" x2="132.0" y2="347"/>
+<text class="cap" x="132.0" y="76" text-anchor="middle">99%</text>
+<line class="rule" x1="221.5" y1="82" x2="221.5" y2="347"/>
+<text class="cap" x="221.5" y="76" text-anchor="middle">99.25%</text>
+<line class="rule" x1="311.0" y1="82" x2="311.0" y2="347"/>
+<text class="cap" x="311.0" y="76" text-anchor="middle">99.5%</text>
+<line class="rule" x1="400.5" y1="82" x2="400.5" y2="347"/>
+<text class="cap" x="400.5" y="76" text-anchor="middle">99.75%</text>
+<line class="rule" x1="490.0" y1="82" x2="490.0" y2="347"/>
+<text class="cap" x="490.0" y="76" text-anchor="middle">100%</text>
+<line class="axis" x1="125" y1="351" x2="131" y2="341"/>
+<line class="axis" x1="130" y1="351" x2="136" y2="341"/>
+<line class="axis" x1="132" y1="82" x2="132" y2="347"/>
+<text class="lbl" x="24" y="108">VFDB</text>
+<rect x="132" y="96" width="358.0" height="15" rx="3" fill="#10b981" opacity="0.92"/>
+<text class="val" x="504" y="108">100.00%</text>
+<text class="mut" x="562" y="108">48,938 / 48,938 - all matched</text>
+<text class="lbl" x="24" y="137">MEGARes</text>
+<rect x="132" y="125" width="358.0" height="15" rx="3" fill="#10b981" opacity="0.92"/>
+<text class="val" x="504" y="137">100.00%</text>
+<text class="mut" x="562" y="137">26,932 / 26,932 - all matched</text>
+<text class="lbl" x="24" y="166">CARD</text>
+<rect x="132" y="154" width="358.0" height="15" rx="3" fill="#10b981" opacity="0.92"/>
+<text class="val" x="504" y="166">100.00%</text>
+<text class="mut" x="562" y="166">19,825 / 19,825 - all matched</text>
+<text class="lbl" x="24" y="195">E. coli VF</text>
+<rect x="132" y="183" width="358.0" height="15" rx="3" fill="#10b981" opacity="0.92"/>
+<text class="val" x="504" y="195">100.00%</text>
+<text class="mut" x="562" y="195">13,169 / 13,169 - all matched</text>
+<text class="lbl" x="24" y="224">ARG-ANNOT</text>
+<rect x="132" y="212" width="358.0" height="15" rx="3" fill="#10b981" opacity="0.92"/>
+<text class="val" x="504" y="224">100.00%</text>
+<text class="mut" x="562" y="224">6,176 / 6,176 - all matched</text>
+<text class="lbl" x="24" y="253">NCBI</text>
+<rect x="132" y="241" width="358.0" height="15" rx="3" fill="#10b981" opacity="0.92"/>
+<text class="val" x="504" y="253">100.00%</text>
+<text class="mut" x="562" y="253">4,980 / 4,980 - all matched</text>
+<text class="lbl" x="24" y="282">ResFinder</text>
+<rect x="132" y="270" width="358.0" height="15" rx="3" fill="#10b981" opacity="0.92"/>
+<text class="val" x="504" y="282">100.00%</text>
+<text class="mut" x="562" y="282">4,775 / 4,775 - all matched</text>
+<text class="lbl" x="24" y="311">PlasmidFinder</text>
+<rect x="132" y="299" width="358.0" height="15" rx="3" fill="#10b981" opacity="0.92"/>
+<text class="val" x="504" y="311">100.00%</text>
+<text class="mut" x="562" y="311">2,542 / 2,542 - all matched</text>
+<text class="lbl" x="24" y="340">ecoh</text>
+<rect x="132" y="328" width="358.0" height="15" rx="3" fill="#10b981" opacity="0.92"/>
+<text class="val" x="504" y="340">100.00%</text>
+<text class="mut" x="562" y="340">411 / 411 - all matched</text>
+<rect x="24" y="370" width="10" height="10" rx="2" fill="#10b981"/><text class="cap" x="40" y="379">every call abricate made, Hydra made too</text>
+<rect x="360" y="370" width="10" height="10" rx="2" fill="#f59e0b"/><text class="cap" x="376" y="379">some calls not matched</text>
+<text class="cap" x="24" y="399">axis starts at 99%, not 0% - matched on locus rather than on gene label, and Hydra reports 158,985 calls to abricate's 127,748</text>
 </svg>

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import math
+import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -1527,3 +1529,23 @@ def test_distinct_markers_are_not_collapsed_together():
     # A serotype antigen carries no underscore and is never rewritten.
     assert _marker_stem("O121") == "O121"
     assert _marker_stem("H7") == "H7"
+
+
+def test_readme_performance_block_matches_metrics():
+    """The README table is generated, so a hand-edited number fails here.
+
+    A figure caption once read 120,380 gene calls while the table above it read
+    116,381, because both were typed by hand from the same run and only one was
+    updated. Both are now rendered from docs/metrics.json, and this is the check
+    that keeps them that way.
+    """
+    root = Path(__file__).resolve().parent.parent
+    sync = root / "tools" / "sync_readme.py"
+    metrics = root / "docs" / "metrics.json"
+    readme = root / "README.md"
+    if not (sync.exists() and metrics.exists()):
+        pytest.skip("metrics tooling not installed in this checkout")
+    result = subprocess.run(
+        [sys.executable, str(sync), str(metrics), str(readme), "--check"],
+        capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr or result.stdout

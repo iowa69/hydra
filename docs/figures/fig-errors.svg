@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="362" viewBox="0 0 820 362" role="img" aria-label="Predicting the measured phenotype">
+
+  <style>
+    .bg    { fill: #ffffff; }
+    .ttl   { fill: #0f172a; font: 600 16px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .sub   { fill: #64748b; font: 400 12px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .lbl   { fill: #334155; font: 400 12.5px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .val   { fill: #0f172a; font: 600 12.5px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .mut   { fill: #64748b; font: 400 11.5px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .cap   { fill: #94a3b8; font: 400 11px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .badge { font: 700 10px system-ui, -apple-system, Segoe UI, sans-serif; fill: #ffffff; }
+    .rule  { stroke: #e2e8f0; stroke-width: 1; }
+    .axis  { stroke: #cbd5e1; stroke-width: 1; }
+    @media (prefers-color-scheme: dark) {
+      .bg   { fill: #0d1117; } .ttl { fill: #e6edf3; } .sub { fill: #8b949e; }
+      .lbl  { fill: #c9d1d9; } .val { fill: #e6edf3; } .mut { fill: #8b949e; }
+      .cap  { fill: #6e7681; } .rule { stroke: #21262d; } .axis { stroke: #30363d; }
+    }
+  </style>
+
+<rect class="bg" width="820" height="362" rx="8"/>
+<text class="ttl" x="24" y="32">Predicting the measured phenotype</text>
+<text class="sub" x="24" y="52">1279 clinical isolates with a EUCAST result, each tool scored on its own drug annotation</text>
+<text class="lbl" x="24" y="108">Colistin, very major errors</text>
+<text class="cap" x="24" y="126">lower is better</text>
+<rect x="288" y="96" width="321.9" height="15" rx="3" fill="#10b981" opacity="0.92"/>
+<text class="mut" x="280" y="108" text-anchor="end">Hydra</text>
+<text class="val" x="617.9" y="108">50</text>
+<rect x="288" y="116" width="412.0" height="15" rx="3" fill="#94a3b8" opacity="0.92"/>
+<text class="mut" x="280" y="128" text-anchor="end">Kleborate</text>
+<text class="val" x="708.0" y="128">64</text>
+<text class="lbl" x="24" y="166">Colistin, balanced accuracy</text>
+<text class="cap" x="24" y="184">higher is better</text>
+<rect x="288" y="154" width="412.0" height="15" rx="3" fill="#10b981" opacity="0.92"/>
+<text class="mut" x="280" y="166" text-anchor="end">Hydra</text>
+<text class="val" x="708.0" y="166">0.735</text>
+<rect x="288" y="174" width="373.3" height="15" rx="3" fill="#94a3b8" opacity="0.92"/>
+<text class="mut" x="280" y="186" text-anchor="end">Kleborate</text>
+<text class="val" x="669.3" y="186">0.666</text>
+<text class="lbl" x="24" y="224">Ciprofloxacin, balanced accuracy</text>
+<text class="cap" x="24" y="242">higher is better</text>
+<rect x="288" y="212" width="412.0" height="15" rx="3" fill="#10b981" opacity="0.92"/>
+<text class="mut" x="280" y="224" text-anchor="end">Hydra</text>
+<text class="val" x="708.0" y="224">0.832</text>
+<rect x="288" y="232" width="247.6" height="15" rx="3" fill="#94a3b8" opacity="0.92"/>
+<text class="mut" x="280" y="244" text-anchor="end">AMRFinderPlus</text>
+<text class="val" x="543.6" y="244">0.500</text>
+<text class="lbl" x="24" y="282">Mean over 8 drugs</text>
+<text class="cap" x="24" y="300">higher is better</text>
+<rect x="288" y="270" width="412.0" height="15" rx="3" fill="#10b981" opacity="0.92"/>
+<text class="mut" x="280" y="282" text-anchor="end">Hydra</text>
+<text class="val" x="708.0" y="282">0.634</text>
+<rect x="288" y="290" width="387.3" height="15" rx="3" fill="#94a3b8" opacity="0.92"/>
+<text class="mut" x="280" y="302" text-anchor="end">Kleborate</text>
+<text class="val" x="683.3" y="302">0.596</text>
+<text class="cap" x="24" y="350">very major error = predicted susceptible, measured resistant (CLSI/ISO 20776-2)</text>
+</svg>

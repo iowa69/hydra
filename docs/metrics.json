@@ -1,0 +1,319 @@
+{
+  "cohort": {
+    "blurb": "Measured on **2933 published *Klebsiella* genomes** whose sequence type was recorded independently, plus 667 closed reference genomes used for the gene-level comparison. Every one completed."
+  },
+  "readme_performance": [
+    {
+      "metric": "Sequence type vs the recorded answer",
+      "hydra": "2933 / 2933 \u2014 100.0%",
+      "rival": "\u2014"
+    },
+    {
+      "metric": "Sequence type vs Kleborate 3.2.4",
+      "hydra": "2933 / 2933 \u2014 100.0%",
+      "rival": "2933 / 2933"
+    },
+    {
+      "metric": "Gene recall vs abricate 1.4.0, nine databases",
+      "hydra": "127,748 / 127,748 \u2014 100.00%",
+      "rival": "abricate 100%"
+    },
+    {
+      "metric": "Point mutations vs AMRFinderPlus 4.2.7",
+      "hydra": "775 / 775 \u2014 100.0%",
+      "rival": "AMRFinderPlus reference"
+    },
+    {
+      "metric": "Disrupted genes vs AMRFinderPlus",
+      "hydra": "242 / 247 \u2014 97.976%",
+      "rival": "AMRFinderPlus reference"
+    },
+    {
+      "metric": "Colistin, very major errors",
+      "hydra": "50",
+      "rival": "Kleborate 64, AMRFinderPlus 73"
+    },
+    {
+      "metric": "Colistin, balanced accuracy",
+      "hydra": "0.735",
+      "rival": "Kleborate 0.666"
+    },
+    {
+      "metric": "Ciprofloxacin, balanced accuracy",
+      "hydra": "0.832",
+      "rival": "Kleborate 0.832, AMRFinderPlus 0.500"
+    },
+    {
+      "metric": "Phenotype, mean balanced accuracy over 8 drugs",
+      "hydra": "0.634",
+      "rival": "Kleborate 0.596, AMRFinderPlus 0.583"
+    },
+    {
+      "metric": "Virulence score vs Kleborate",
+      "hydra": "99.45%",
+      "rival": "reference"
+    },
+    {
+      "metric": "Whole job, per genome",
+      "hydra": "10.8 s",
+      "rival": "23.3 s for four tools"
+    }
+  ],
+  "readme_figures": [
+    {
+      "src": "docs/figures/fig-headtohead.svg",
+      "alt": "Head to head"
+    },
+    {
+      "src": "docs/figures/fig-recall.svg",
+      "alt": "Gene recall"
+    },
+    {
+      "src": "docs/figures/fig-errors.svg",
+      "alt": "Predicting the measured phenotype"
+    },
+    {
+      "src": "docs/figures/fig-speed.svg",
+      "alt": "Runtime"
+    }
+  ],
+  "head_to_head_title": "Head to head on 2933 Klebsiella genomes",
+  "head_to_head_subtitle": "same genomes, same databases, same thresholds, matched on locus",
+  "head_to_head": [
+    {
+      "label": "Whole job, per genome",
+      "hydra": "10.8 s",
+      "rival": "23.3 s, four tools",
+      "verdict": "ahead"
+    },
+    {
+      "label": "Tools to run",
+      "hydra": "1",
+      "rival": "4",
+      "verdict": "ahead"
+    },
+    {
+      "label": "Sequence type vs recorded answer",
+      "hydra": "2933 / 2933",
+      "rival": "not attempted",
+      "verdict": "ahead"
+    },
+    {
+      "label": "Point mutations vs AMRFinderPlus",
+      "hydra": "100.0%",
+      "rival": "AMRFinderPlus reference",
+      "verdict": "level"
+    },
+    {
+      "label": "Colistin, very major errors",
+      "hydra": "50",
+      "rival": "Kleborate 64",
+      "verdict": "ahead"
+    },
+    {
+      "label": "Colistin, balanced accuracy",
+      "hydra": "0.735",
+      "rival": "Kleborate 0.666",
+      "verdict": "ahead"
+    },
+    {
+      "label": "Ciprofloxacin, balanced accuracy",
+      "hydra": "0.832",
+      "rival": "Kleborate 0.832",
+      "verdict": "level"
+    },
+    {
+      "label": "Gene recall, nine databases",
+      "hydra": "100.00%",
+      "rival": "abricate 100%",
+      "verdict": "level"
+    },
+    {
+      "label": "Sequence type vs Kleborate",
+      "hydra": "2933 / 2933",
+      "rival": "2933 / 2933",
+      "verdict": "level"
+    },
+    {
+      "label": "Virulence score vs Kleborate",
+      "hydra": "99.45%",
+      "rival": "reference",
+      "verdict": "level"
+    }
+  ],
+  "recall": {
+    "title": "Everything abricate finds, Hydra finds",
+    "subtitle": "667 closed genomes, nine databases, 127,748 gene calls compared",
+    "footnote": "matched on locus rather than on gene label, and Hydra reports 158,985 calls to abricate's 127,748",
+    "databases": [
+      {
+        "label": "VFDB",
+        "recall": 100.0,
+        "matched": 48938,
+        "total": 48938
+      },
+      {
+        "label": "MEGARes",
+        "recall": 100.0,
+        "matched": 26932,
+        "total": 26932
+      },
+      {
+        "label": "CARD",
+        "recall": 100.0,
+        "matched": 19825,
+        "total": 19825
+      },
+      {
+        "label": "E. coli VF",
+        "recall": 100.0,
+        "matched": 13169,
+        "total": 13169
+      },
+      {
+        "label": "ARG-ANNOT",
+        "recall": 100.0,
+        "matched": 6176,
+        "total": 6176
+      },
+      {
+        "label": "NCBI",
+        "recall": 100.0,
+        "matched": 4980,
+        "total": 4980
+      },
+      {
+        "label": "ResFinder",
+        "recall": 100.0,
+        "matched": 4775,
+        "total": 4775
+      },
+      {
+        "label": "PlasmidFinder",
+        "recall": 100.0,
+        "matched": 2542,
+        "total": 2542
+      },
+      {
+        "label": "ecoh",
+        "recall": 100.0,
+        "matched": 411,
+        "total": 411
+      }
+    ]
+  },
+  "speed": {
+    "title": "One pass instead of four",
+    "subtitle": "2933 genomes, same machine",
+    "hydra_seconds": 10.8,
+    "segments": [
+      {
+        "name": "amrfinder",
+        "seconds": 9.45
+      },
+      {
+        "name": "kleborate",
+        "seconds": 9.13
+      },
+      {
+        "name": "abricate x9",
+        "seconds": 4.6
+      },
+      {
+        "name": "mlst",
+        "seconds": 0.13
+      }
+    ]
+  },
+  "errors": {
+    "title": "Predicting the measured phenotype",
+    "subtitle": "1279 clinical isolates with a EUCAST result, each tool scored on its own drug annotation",
+    "footnote": "very major error = predicted susceptible, measured resistant (CLSI/ISO 20776-2)",
+    "rows": [
+      {
+        "label": "Colistin, very major errors",
+        "hydra": 50,
+        "rival": 64,
+        "rival_name": "Kleborate",
+        "lower_is_better": true
+      },
+      {
+        "label": "Colistin, balanced accuracy",
+        "hydra": 0.735,
+        "rival": 0.666,
+        "rival_name": "Kleborate",
+        "lower_is_better": false
+      },
+      {
+        "label": "Ciprofloxacin, balanced accuracy",
+        "hydra": 0.832,
+        "rival": 0.5,
+        "rival_name": "AMRFinderPlus",
+        "lower_is_better": false
+      },
+      {
+        "label": "Mean over 8 drugs",
+        "hydra": 0.634,
+        "rival": 0.596,
+        "rival_name": "Kleborate",
+        "lower_is_better": false
+      }
+    ]
+  },
+  "example": {
+    "title": "One command, one table",
+    "subtitle": "a finished K. pneumoniae genome, every value from this run",
+    "command": "hydra run -a isolate.fasta --preset deep -o results/",
+    "panels": [
+      {
+        "label": "SPECIES",
+        "value": "Klebsiella pneumoniae",
+        "sub": "strong - sketch and scheme agree"
+      },
+      {
+        "label": "SEQUENCE TYPE",
+        "value": "ST101",
+        "sub": "klebsiella scheme, 7/7 exact loci"
+      },
+      {
+        "label": "ACQUIRED AMR GENES",
+        "value": "47",
+        "sub": "nine databases, de-duplicated"
+      },
+      {
+        "label": "VIRULENCE GENES",
+        "value": "93",
+        "sub": "VFDB and the lineage loci"
+      },
+      {
+        "label": "PLASMID REPLICONS",
+        "value": "5",
+        "sub": "PlasmidFinder"
+      },
+      {
+        "label": "RESISTANCE",
+        "value": "ESBL positive",
+        "sub": "score 1 - no carbapenemase"
+      },
+      {
+        "label": "YERSINIABACTIN",
+        "value": "ybST 63",
+        "sub": "ybt 6; ICEKp5, virulence score 1"
+      },
+      {
+        "label": "CAPSULE",
+        "value": "wzi 29",
+        "sub": "K locus marker"
+      },
+      {
+        "label": "TIME",
+        "value": "10.8 s",
+        "sub": "on 20 cores, everything above"
+      }
+    ],
+    "footer": "results/  ->  hydra.tsv  hydra.summary.tsv  hydra.matrix.tsv  hydra.classes.tsv  hydra.mlst.tsv  hydra.typing.tsv  hydra.json  hydra.html"
+  },
+  "notes": {
+    "ncbi_call_volume": "Hydra's ncbi build carries stress-response and virulence elements that abricate's AMR-only build does not, which is why its call count is the highest above abricate's."
+  }
+}

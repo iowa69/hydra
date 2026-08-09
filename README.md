@@ -20,33 +20,40 @@
 
 ---
 
+<!-- METRICS:BEGIN -->
+
 ## Performance
 
-Measured on **5375 *Klebsiella* samples**: 667 closed reference genomes, 1279 clinical
-isolates, 2933 published genomes whose sequence type was recorded independently, and
-496 screened from assembly and reads together. Every one completed.
+Measured on **2933 published *Klebsiella* genomes** whose sequence type was recorded independently, plus 667 closed reference genomes used for the gene-level comparison. Every one completed.
 
 | | Hydra | Reference tool |
 |---|---|---|
-| Sequence type vs the recorded answer, 2933 genomes | **2933 / 2933 — 100%** | — |
-| Sequence type vs Kleborate 3.2.4 | **2933 / 2933 — 100%** | 2933 / 2933 |
-| Sequence type vs `mlst` 2.35.0 | **99.85 – 100%** | 3 genomes it will not type, Hydra types |
-| Gene recall vs abricate 1.4.0, nine databases | **116,380 / 116,381 — 100%** | abricate 100% |
-| Distinct sequence types called | **539** | — |
+| Sequence type vs the recorded answer | **2933 / 2933 — 100.0%** | — |
+| Sequence type vs Kleborate 3.2.4 | **2933 / 2933 — 100.0%** | 2933 / 2933 |
+| Gene recall vs abricate 1.4.0, nine databases | **127,748 / 127,748 — 100.00%** | abricate 100% |
+| Point mutations vs AMRFinderPlus 4.2.7 | **775 / 775 — 100.0%** | AMRFinderPlus reference |
+| Disrupted genes vs AMRFinderPlus | **242 / 247 — 97.976%** | AMRFinderPlus reference |
+| Colistin, very major errors | **50** | Kleborate 64, AMRFinderPlus 73 |
+| Colistin, balanced accuracy | **0.735** | Kleborate 0.666 |
+| Ciprofloxacin, balanced accuracy | **0.832** | Kleborate 0.832, AMRFinderPlus 0.500 |
+| Phenotype, mean balanced accuracy over 8 drugs | **0.634** | Kleborate 0.596, AMRFinderPlus 0.583 |
 | Virulence score vs Kleborate | **99.45%** | reference |
-| Colistin, very major errors | **56** | Kleborate 64 |
-| Colistin, balanced accuracy | **0.706** | Kleborate 0.666 |
-| Point mutations vs AMRFinderPlus 4.2.7 | **556 shared** | 1 unique to Hydra |
-| SCCmec vs strains with published types | **4 / 4** | — |
-| Heteroresistance, 5% minority allele | **0.0453, p=1.1e-21** | not attempted by any |
-| Whole job, per genome | **11.7 s** | 18.1 s for four tools |
-| Documented flags behaving correctly | **69 / 69** | — |
+| Whole job, per genome | **10.8 s** | 23.3 s for four tools |
 
 <p align="center"><img src="docs/figures/fig-headtohead.svg" alt="Head to head" width="820"></p>
 
+<p align="center"><img src="docs/figures/fig-recall.svg" alt="Gene recall" width="820"></p>
+
+<p align="center"><img src="docs/figures/fig-errors.svg" alt="Predicting the measured phenotype" width="820"></p>
+
 <p align="center"><img src="docs/figures/fig-speed.svg" alt="Runtime" width="820"></p>
 
-<p align="center"><img src="docs/figures/fig-recall.svg" alt="Gene recall" width="820"></p>
+<!-- METRICS:END -->
+
+Every number above is generated from `analysis/metrics.json` by
+`sync_readme.py`, which the test suite re-runs with `--check`: a hand-edited
+figure in this table fails the build. How each was measured is in
+[docs/VALIDATION.md](docs/VALIDATION.md).
 
 ## Install
 
@@ -222,6 +229,23 @@ hydra db update              # refresh from upstream; never automatic
 hydra db bundle -o db.tar.gz # pack for an offline machine
 hydra db check               # verify every installed database still loads
 ```
+
+| Flag | Applies to | Does |
+|---|---|---|
+| `--from-file ARCHIVE` | `db download` | install a bundle already on this machine |
+| `--url URL` | `db download` | download a bundle over HTTP(S) and install it |
+| `--list` | `db download` | print where each database comes from, downloading nothing |
+| `--force` | `db download` | replace databases that are already installed |
+| `--dry-run` | `db update` | list what would be refreshed and change nothing |
+| `--source NAME` | `db import` | import from a named conda environment |
+| `--output PATH`, `-o` | `db bundle` | where to write the archive |
+| `--compress` | `db bundle` | gzip the archive |
+| `--db-dir PATH` | every `db` command | database directory (default `$HYDRA_DB`, else `~/.hydra/db`) |
+| `--version` | `hydra` | print the version and exit |
+
+`hydra db update` never runs on its own. Nothing in Hydra reaches the network
+unless you type one of these commands, so a database cannot change underneath a
+study that is already running.
 
 ## Outputs
 
