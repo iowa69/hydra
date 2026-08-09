@@ -297,14 +297,33 @@ AMRProt catalogue and should agree exactly where Hydra adds nothing beyond it.
 
 **The very-major-error column needs reading with the drugs in front of it.** Hydra's
 719 against AMRFinderPlus's 284 is not a general result: 457 of Hydra's are
-tigecycline alone, where AMRFinderPlus records 1. AMRFinderPlus reaches that 1 by
-predicting resistance for very nearly every isolate, which costs it the specificity
-to distinguish any of them — its balanced accuracy on tigecycline is 0.506, against a
-coin's 0.500. Neither tool can predict tigecycline resistance from a genome, because
-it is driven by efflux regulation rather than by an acquired gene; the difference is
-only in which way each fails. Excluding intrinsic *oqxAB* is what moved Hydra from
-0.503 to 0.473 there, and the same exclusion is what moved ciprofloxacin from 0.500
-to 0.832. That trade was made deliberately and is not free.
+tigecycline alone, where AMRFinderPlus records 1. That one drug is worth setting out
+in full, because the summary number inverts what is actually happening.
+
+| Tool | Sensitivity | Specificity | True positives | True negatives | Balanced accuracy |
+|---|---|---|---|---|---|
+| Hydra | 0.054 | **0.892** | 26 | 132 | 0.473 |
+| AMRFinderPlus | **0.998** | 0.013 | 482 | 2 | 0.506 |
+| abricate (ncbi) | 0.549 | 0.426 | 265 | 63 | 0.487 |
+| Kleborate | 0.000 | 1.000 | 0 | 148 | 0.500 |
+| abricate (resfinder) | 0.000 | 1.000 | 0 | 148 | 0.500 |
+
+The cohort is 483 resistant against 148 susceptible. Kleborate and abricate's
+resfinder database score 0.500 by calling nothing resistant at all; AMRFinderPlus
+scores 0.506 by calling very nearly everything resistant, finding 2 of the 148
+susceptible isolates. Those are the two degenerate constant answers, and a constant
+prediction cannot inform a treatment decision whichever side it falls on. Hydra is
+the only tool of the five making a discriminating call here, and its 26 true
+positives come at 0.892 specificity.
+
+No tool predicts tigecycline resistance from a genome, because it is driven by efflux
+regulation rather than by an acquired gene. Hydra could be moved above 0.500 by
+loosening what counts as a determinant until sensitivity rose, but that would be
+fitting to this answer key rather than measuring anything, so it has not been done.
+
+Excluding intrinsic *oqxAB* is what moved Hydra from 0.503 to 0.473 here, and the
+same exclusion is what moved ciprofloxacin from 0.500 to 0.832. That trade was made
+deliberately and is not free.
 
 Drug by drug, where a genome can predict the phenotype at all, Hydra has the fewest
 very major errors on colistin (50, against Kleborate's 64 and AMRFinderPlus's 73) and
