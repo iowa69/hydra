@@ -19,8 +19,8 @@ from .records import Hit, SampleResult
 from .seqio import (assembly_stats, fastq_stats, read_fasta, validate_fasta,
                     validate_fastq)
 from .typing.cassette import CassetteTyper
-from .typing.lineage import (LineageTyper, esbl_alleles, resistance_score,
-                             virulence_score)
+from .typing.lineage import (LineageTyper, esbl_alleles, is_intrinsic,
+                             resistance_score, virulence_score)
 from .typing.mlst import MlstTyper
 from .typing.species import SpeciesIdentifier
 from .utils import LOG, HydraError, check_workspace, human_time
@@ -601,6 +601,7 @@ class Pipeline:
             unique.append(hit)
         result.hits = unique
         self._resolve_loci(result)
+        self._mark_intrinsic(result)
 
         score, flags = resistance_score([h for h in result.hits if h.primary],
                                         esbl_alleles(self.store.root))
@@ -612,6 +613,28 @@ class Pipeline:
             virulence, basis = virulence_score(result.species, result.typing)
             result.scores["virulence_score"] = virulence
             result.scores["virulence_score_basis"] = basis
+
+    def _mark_intrinsic(self, result: SampleResult) -> None:
+        """Note the determinants that belong to this species' own chromosome.
+
+        They are reported like any other, but a reader deciding whether an
+        isolate is resistant needs to know that oqxAB is in every K. pneumoniae
+        and says nothing on its own. The note is the annotation; nothing is
+        hidden or dropped.
+        """
+        organism = result.species.organism if result.species else None
+        if not organism:
+            return
+        for hit in result.hits:
+            # A broken copy is never intrinsic. The gene being present is
+            # unremarkable; the gene being disrupted is the finding, and for
+            # oqxR the disruption is precisely what confers resistance.
+            if hit.method == "DISRUPTX" or hit.resolution == "POINT":
+                continue
+            if not is_intrinsic(hit.gene, organism):
+                continue
+            label = f"intrinsic to {organism.replace('_', ' ')}"
+            hit.note = f"{hit.note}; {label}" if hit.note else label
 
     def _resolve_loci(self, result: SampleResult) -> None:
         """Mark one hit per genomic locus as primary when databases overlap.

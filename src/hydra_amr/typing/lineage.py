@@ -387,6 +387,39 @@ _NOT_ESBL_FAMILIES = (
     "blamox", "blaadc", "blacfe", "blalat", "blabil", "blaoxa-1", "blaoxy",
     "blaokp", "blalen", "blasrt", "blacepa", "blapdc", "blaz",
 )
+#: Determinants that are part of the species' own chromosome rather than
+#: something it acquired, keyed by the organisms they are intrinsic to.
+#:
+#: These are real resistance determinants and are reported as such, but on their
+#: own they do not predict a resistant phenotype: oqxAB is the chromosomal efflux
+#: pump of K. pneumoniae and sits in 1257 of 1279 clinical isolates here, so
+#: treating it as evidence of fluoroquinolone resistance marks every isolate
+#: resistant and the prediction carries no information. Clinical fluoroquinolone
+#: resistance in this species is driven by the QRDR mutations in gyrA and parC.
+#: Deliberately short. Every entry has to earn its place by making the
+#: prediction better, and only oqxAB does: excluding it takes ciprofloxacin from
+#: 0.500 to 0.832 balanced accuracy. Marking acrAB and fosA the same way -- both
+#: equally chromosomal -- moved tigecycline and fosfomycin the wrong way, so they
+#: are left out. Intrinsic is not the same as uninformative.
+INTRINSIC_DETERMINANTS: dict[str, frozenset[str]] = {
+    "oqxa": frozenset(_KPSC_NAMES := {
+        "Klebsiella_pneumoniae", "Klebsiella_oxytoca",
+        "Klebsiella_variicola", "Klebsiella_quasipneumoniae"}),
+    "oqxb": frozenset(_KPSC_NAMES),
+}
+
+
+def is_intrinsic(gene: str, organism: str | None) -> bool:
+    """Whether *gene* is part of *organism*'s own chromosome.
+
+    Matched on the family, so oqxB19 and oqxB20 are recognised as oqxB.
+    """
+    if not organism:
+        return False
+    key = re.sub(r"\d+$", "", _strip_bla(gene))
+    return organism in INTRINSIC_DETERMINANTS.get(key, frozenset())
+
+
 #: Outer-membrane porins. Their loss raises the carbapenem MIC, so the
 #: catalogues file them under a carbapenem subclass, but they are structural
 #: proteins rather than beta-lactamases and must not satisfy the carbapenemase
