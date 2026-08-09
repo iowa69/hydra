@@ -18,7 +18,7 @@ from ..records import Hit
 from ..seqio import read_fasta
 from ..utils import LOG, natural_key
 from .blast import (Hsp, blast, check_db_exists, deduplicate, interval_length,
-                    merge_hsps, merge_intervals)
+                    merge_hsps, merge_intervals, overlap_length)
 from .mutations import MutationCatalog, evaluate, multi_residue, walk_alignment
 from .nucl import QueryBatch
 
@@ -382,11 +382,18 @@ class ProteinScreener:
     def _call_protein_mutations(self, batch: QueryBatch, hsps: list[Hsp], handle,
                                 organism_by_sample: dict[str, str | None],
                                 thresholds) -> dict[str, list[Hit]]:
-        # Index the best HSP set per (sample, contig, reference protein).
+        # Index HSPs per (sample, contig, reference protein). AMRProt carries a
+        # plain copy of each catalogued protein and one copy per mutation in it,
+        # the latter marked by a position in the accession
+        # (``WP_002911375.1`` against ``WP_002911375.1:47:mgrB_W47R``). Both are
+        # indexed under the plain accession, because only the mutant copy aligns
+        # across a variant at the very end of a short protein: mgrB is 47
+        # residues and the wild-type copy stops at 43, leaving the catalogued
+        # position uncovered and the mutation uncalled.
         by_target: dict[tuple[str, str, str], list[Hsp]] = {}
         for hsp in hsps:
             meta = handle.meta_for(hsp.sseqid)
-            accession = meta.get("accession", "")
+            accession = (meta.get("accession", "") or "").split(":")[0]
             piece = batch.id_map.get(hsp.qseqid)
             if piece is None:
                 continue
@@ -394,36 +401,37 @@ class ProteinScreener:
             if accession not in catalog.protein:
                 continue
             by_target.setdefault((piece.sample, piece.contig, piece.offset,
-                                  hsp.sseqid), []).append(hsp)
+                                  accession), []).append(hsp)
         if not by_target:
             return {}
 
+        # Every copy of the gene is examined. Keeping only the best-aligning
+        # contig reports whichever copy scores highest and misses a mutation
+        # carried by another copy; one row per mutation is enforced on the call
+        # below instead, so a duplicated gene still yields a single finding.
         out: dict[str, list[Hit]] = {}
-        # Keep only the best contig per (sample, protein) so a duplicated gene is
-        # not reported twice with conflicting alleles.
-        best_locus: dict[tuple[str, str], tuple[float, tuple]] = {}
-        for key, group in by_target.items():
-            sample, _contig, _offset, sseqid = key
-            score = sum(h.bitscore for h in group)
-            marker = (sample, sseqid)
-            if marker not in best_locus or score > best_locus[marker][0]:
-                best_locus[marker] = (score, key)
-
-        for _marker, (_score, key) in best_locus.items():
-            sample, contig, offset, sseqid = key
+        best_call: dict[tuple[str, str], float] = {}
+        for key in sorted(by_target, key=lambda k: -sum(h.bitscore for h in by_target[k])):
+            sample, contig, offset, accession = key
             group = by_target[key]
-            meta = handle.meta_for(sseqid)
-            accession = meta["accession"]
             entries = self.catalog(organism_by_sample.get(sample)).protein.get(accession, [])
             if not entries:
                 continue
-            reference_length = int(meta.get("length", 0) or 0)
+            reference_length = max(
+                (int(handle.meta_for(h.sseqid).get("length", 0) or 0) for h in group),
+                default=0)
             covered = interval_length(merge_intervals(
                 (min(h.sstart, h.send), max(h.sstart, h.send)) for h in group))
             if reference_length and 100.0 * covered / reference_length < thresholds.mutation_min_coverage:
                 continue
             calls = self._match_entries(group, entries, reference_length, nucleotide=False)
             for entry, obs, hsp in calls:
+                # One row per mutation per sample, from the strongest copy that
+                # carries it; groups are visited best-scoring first.
+                marker = (sample, entry.symbol)
+                if marker in best_call:
+                    continue
+                best_call[marker] = hsp.bitscore
                 out.setdefault(sample, []).append(Hit(
                     sample=sample, database="protein", gene=entry.gene,
                     accession=accession, product=entry.name.replace("_", " "),
@@ -442,33 +450,58 @@ class ProteinScreener:
         return out
 
     @staticmethod
+    def _copies_spanning(group: list[Hsp], position: int) -> list[Hsp]:
+        """One best alignment per distinct copy of the locus covering *position*.
+
+        A genome often carries the same reference locus more than once, and the
+        copies need not agree: a chromosome can hold one wild-type blaSHV
+        promoter and two mutant ones. Testing only the highest-scoring alignment
+        reads whichever copy aligns best and reports nothing when that copy
+        happens to be the wild type, so every copy is tested and the mutation is
+        called if any of them carries it.
+
+        Copies are separated on the query, and only the best alignment of each is
+        kept, so a fragmentary or spurious HSP cannot vote on the residue.
+        """
+        spanning = [hsp for hsp in group
+                    if min(hsp.sstart, hsp.send) <= position <= max(hsp.sstart, hsp.send)
+                    and hsp.qseq]
+        copies: list[Hsp] = []
+        for hsp in sorted(spanning, key=lambda h: h.bitscore, reverse=True):
+            lo, hi = min(hsp.qstart, hsp.qend), max(hsp.qstart, hsp.qend)
+            length = hi - lo + 1
+            if any(overlap_length((lo, hi), (min(k.qstart, k.qend), max(k.qstart, k.qend)))
+                   > 0.5 * length for k in copies):
+                continue
+            copies.append(hsp)
+        return copies
+
+    @staticmethod
     def _match_entries(group: list[Hsp], entries, reference_length: int, *, nucleotide: bool):
-        """Test every catalogue entry against the best-covering HSP for its position."""
+        """Test every catalogue entry against each copy of the locus it sits in."""
         calls = []
         for entry in entries:
             position = entry.position
             if position < 0 and reference_length:
                 position = reference_length + position + 1
             span = max(1, len(entry.ref)) if entry.is_deletion else 1
-            best = None
-            for hsp in group:
-                lo, hi = min(hsp.sstart, hsp.send), max(hsp.sstart, hsp.send)
-                if lo <= position <= hi and (best is None or hsp.bitscore > best.bitscore):
-                    best = hsp
-            if best is None or not best.qseq:
-                continue
-            if span > 1:
-                obs = multi_residue(best.qseq, best.sseq, best.sstart, best.send,
-                                    position, span, nucleotide=nucleotide)
-            else:
-                seen = walk_alignment(best.qseq, best.sseq, best.sstart, best.send,
-                                      {position: None}, nucleotide=nucleotide)
-                obs = seen[position]
-            is_mutant, note = evaluate(entry, obs)
-            if is_mutant:
-                calls.append((entry, obs, best))
-            elif note.startswith("reference mismatch"):
-                LOG.debug("skipped %s: %s", entry.symbol, note)
+            for hsp in ProteinScreener._copies_spanning(group, position):
+                if span > 1:
+                    obs = multi_residue(hsp.qseq, hsp.sseq, hsp.sstart, hsp.send,
+                                        position, span, nucleotide=nucleotide)
+                else:
+                    seen = walk_alignment(hsp.qseq, hsp.sseq, hsp.sstart, hsp.send,
+                                          {position: None}, nucleotide=nucleotide)
+                    obs = seen[position]
+                is_mutant, note = evaluate(entry, obs)
+                if is_mutant:
+                    # One row per mutation, from the strongest copy carrying it.
+                    # A 23S rRNA operon puts the same change on seven copies and
+                    # it is one finding, not seven.
+                    calls.append((entry, obs, hsp))
+                    break
+                if note.startswith("reference mismatch"):
+                    LOG.debug("skipped %s: %s", entry.symbol, note)
         return calls
 
     def call_dna_mutations(self, batch: QueryBatch, workdir: Path, organism: str,
@@ -500,18 +533,16 @@ class ProteinScreener:
             by_target.setdefault((piece.sample, piece.contig, piece.offset,
                                   hsp.sseqid), []).append(hsp)
 
-        # Multi-copy loci (rRNA operons) appear on several contigs; keep the best
-        # copy per sample so the assembly consensus is reported once.
-        best_locus: dict[tuple[str, str], tuple[float, tuple]] = {}
-        for key, group in by_target.items():
-            sample, _contig, _offset, sseqid = key
-            score = sum(h.bitscore for h in group)
-            marker = (sample, sseqid)
-            if marker not in best_locus or score > best_locus[marker][0]:
-                best_locus[marker] = (score, key)
-
+        # Every copy of the locus is examined, not just the best-aligning one.
+        # Copies of a gene need not agree: a chromosome can carry one wild-type
+        # blaSHV promoter and two mutant ones, and keeping only the strongest
+        # alignment reports the wild type and misses the mutation entirely.
+        # Multi-copy loci such as rRNA operons still yield one row per mutation,
+        # because the de-duplication now happens on the call below rather than
+        # on the locus here.
         out: dict[str, list[Hit]] = {}
-        for _marker, (_score, key) in best_locus.items():
+        best_call: dict[tuple[str, str], float] = {}
+        for key in sorted(by_target, key=lambda k: -sum(h.bitscore for h in by_target[k])):
             sample, contig, offset, sseqid = key
             group = by_target[key]
             # Merge, never sum: a multi-copy locus such as an rRNA operon puts
@@ -526,6 +557,12 @@ class ProteinScreener:
             entries = catalog.dna[sseqid]
             calls = self._match_entries(group, entries, reference_length, nucleotide=True)
             for entry, obs, hsp in calls:
+                # One row per mutation per sample, from whichever copy supports
+                # it most strongly; groups are visited best-scoring first.
+                marker = (sample, entry.symbol)
+                if marker in best_call:
+                    continue
+                best_call[marker] = hsp.bitscore
                 out.setdefault(sample, []).append(Hit(
                     sample=sample, database="protein", gene=entry.gene,
                     accession=sseqid.split("@")[0], product=entry.name.replace("_", " "),

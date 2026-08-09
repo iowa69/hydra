@@ -284,6 +284,36 @@ class AlignedObservation:
     reference: str
     aligned: bool
     query_position: int | None = None
+    #: Residues the query carries between this reference position and the next.
+    #: Empty for every ordinary substitution; an insertion is only visible here,
+    #: because inserted residues have no reference position of their own.
+    inserted_after: str = ""
+
+
+def _shift_insertions_right(inserted: dict[int, str],
+                            reference_at: dict[int, str]) -> dict[int, str]:
+    """Move each insertion to the last position that describes the same variant.
+
+    Where an insertion falls inside a repeat its coordinates are ambiguous: the
+    GD duplication in loop 3 of OmpK36 sits in a ``GD..GD`` run, so an aligner
+    can place it after G133 and a catalogue after D135 while both describe one
+    variant. Aligners left-align; the mutation catalogues follow the HGVS 3'
+    rule and right-align, so an insertion is shifted as far right as it can go
+    without changing the sequence it produces. Without this the porin
+    duplication -- the commonest carbapenem determinant in the cohort -- is
+    found by the alignment and then discarded for sitting two residues away
+    from where it is catalogued.
+    """
+    shifted: dict[int, str] = {}
+    for anchor, block in inserted.items():
+        while block:
+            nxt = reference_at.get(anchor + 1)
+            if not nxt or nxt != block[0]:
+                break
+            anchor += 1
+            block = block[1:] + block[0]
+        shifted[anchor] = shifted.get(anchor, "") + block
+    return shifted
 
 
 def walk_alignment(qseq: str, sseq: str, sstart: int, send: int,
@@ -299,13 +329,36 @@ def walk_alignment(qseq: str, sseq: str, sstart: int, send: int,
     step = 1 if send >= sstart else -1
     minus = step == -1 and nucleotide
     out: dict[int, AlignedObservation] = {}
+    #: Query residues occupying a subject gap, keyed by the reference position
+    #: they follow in ascending subject order.
+    inserted: dict[int, str] = {}
+    #: Every reference residue the alignment covers, needed to shift an
+    #: insertion to the position the catalogue names it by.
+    reference_at: dict[int, str] = {}
     subject_pos = sstart
     query_offset = 0
+    pending: list[str] = []
     for q_char, s_char in zip(qseq, sseq):
         if s_char == "-":
             if q_char != "-":
+                # No reference position of its own: an inserted residue, held
+                # until the next aligned column tells us where it belongs.
+                pending.append(q_char)
                 query_offset += 1
             continue
+        if pending:
+            # Walking a minus-strand alignment moves down the subject, so the
+            # residues just passed sit *before* this position in reference
+            # orientation, and their order and bases both flip.
+            if minus:
+                run = "".join(_complement(c) for c in reversed(pending))
+                anchor = subject_pos
+            else:
+                run = "".join(pending)
+                anchor = subject_pos - step
+            inserted[anchor] = inserted.get(anchor, "") + run.upper()
+            pending = []
+        reference_at[subject_pos] = (_complement(s_char) if minus else s_char).upper()
         if subject_pos in targets:
             observed = q_char
             reference = s_char
@@ -319,6 +372,9 @@ def walk_alignment(qseq: str, sseq: str, sstart: int, send: int,
         if q_char != "-":
             query_offset += 1
         subject_pos += step
+    inserted = _shift_insertions_right(inserted, reference_at)
+    for position, observation in out.items():
+        observation.inserted_after = inserted.get(position, "")
     for position in targets:
         if position not in out:
             out[position] = AlignedObservation(observed="", reference="", aligned=False)
@@ -335,7 +391,8 @@ def multi_residue(qseq: str, sseq: str, sstart: int, send: int, position: int,
     aligned = all(seen[position + offset].aligned for offset in range(length))
     first = seen[position]
     return AlignedObservation(observed=observed, reference=reference, aligned=aligned,
-                              query_position=first.query_position)
+                              query_position=first.query_position,
+                              inserted_after=seen[position + length - 1].inserted_after)
 
 
 def evaluate(entry: MutationEntry, obs: AlignedObservation) -> tuple[bool, str]:
@@ -349,13 +406,27 @@ def evaluate(entry: MutationEntry, obs: AlignedObservation) -> tuple[bool, str]:
         return False, ""
     expected_ref = entry.ref.upper()
     if expected_ref and obs.reference and obs.reference != expected_ref:
-        # The alignment did not land on the catalogued residue - do not call.
-        return False, f"reference mismatch (expected {expected_ref}, aligned {obs.reference})"
+        # Aligning to a reference that already carries the alternate allele is
+        # the one legitimate mismatch. AMRProt ships a mutant copy of each
+        # catalogued protein so a variant at the end of a short gene still
+        # aligns end to end, and the query matching it there is the mutation
+        # rather than a misplaced alignment. Any other mismatch means the
+        # alignment did not land on the catalogued residue - do not call.
+        if not (obs.reference.upper() == entry.alt.upper()
+                and obs.observed.upper() == entry.alt.upper()):
+            return False, (f"reference mismatch (expected {expected_ref}, "
+                           f"aligned {obs.reference})")
     if change == "insertion":
-        # An inserted base sits between two reference positions, which a
-        # position-indexed alignment walk cannot see; calling it would need the
-        # query gap structure. Never guess.
-        return False, "insertion not callable from a position-indexed alignment"
+        # The catalogue writes an insertion as the reference residue followed by
+        # what the query adds after it: ompK36_D135DGD is D at 135 with GD
+        # inserted behind it, the loop-3 duplication that narrows the porin.
+        # Requiring the reference residue to match as well keeps a coincidental
+        # run of inserted residues elsewhere from satisfying the entry.
+        if obs.observed.upper() != entry.ref.upper():
+            return False, ""
+        if obs.inserted_after.upper() == entry.inserted_bases:
+            return True, "insertion"
+        return False, ""
     if change == "complex":
         return False, f"unsupported change '{entry.ref}->{entry.alt}'"
     if obs.observed.upper() == entry.alt.upper():

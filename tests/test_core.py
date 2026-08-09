@@ -18,7 +18,7 @@ from hydra_amr.engines.blast import (Hsp, deduplicate, interval_length, merge_hs
 from hydra_amr.engines.mutations import (AlignedObservation, MutationEntry, _parse_symbol,
                                          evaluate, reference_index, walk_alignment)
 from hydra_amr.engines.nucl import build_query_batch
-from hydra_amr.engines.protein import loss_of_function_call
+from hydra_amr.engines.protein import ProteinScreener, loss_of_function_call
 from hydra_amr.engines.reads import (LocusConsensus, ReadMapper, ReadSet, Variant, _annotate_codons,
                                      is_multicopy_rrna,
                                      _base_counts, _count_alt, _indel_count, _looks_like_cds,
@@ -169,6 +169,33 @@ def test_merge_hsps_still_joins_a_gene_split_by_an_assembly_gap():
     merged = merge_hsps([left, right])
     assert merged[0].n_hsps == 2
     assert merged[0].coverage_pct == pytest.approx(100.0)
+
+
+def test_merge_hsps_reports_a_tandem_duplication_as_two_copies():
+    """Two full-length copies of one gene a few kilobases apart are two hits.
+
+    Taken from a real class 1 integron carrying sul1 at 16356-17195 and again at
+    23578-24417. The gap is under the span slack allowed for assembly gaps, so
+    proximity alone puts both copies in one cluster; only noticing that they
+    cover the same reference bases keeps the second copy from being discarded.
+    """
+    first = _hsp(qstart=16_356, qend=17_195, sstart=1, send=840, length=840,
+                 nident=840, slen=840, bitscore=1516)
+    second = _hsp(qstart=23_578, qend=24_417, sstart=1, send=840, length=840,
+                  nident=840, slen=840, bitscore=1516)
+    merged = sorted(merge_hsps([first, second]), key=lambda m: m.query_start)
+    assert len(merged) == 2
+    assert [m.query_start for m in merged] == [16_356, 23_578]
+    assert all(m.coverage_pct == pytest.approx(100.0) for m in merged)
+
+
+def test_merge_hsps_separates_copies_sharing_a_coordinate_bucket():
+    """Copies eight kilobases apart are distinct, not one rounded-off locus."""
+    first = _hsp(qstart=21_000, qend=21_840, sstart=1, send=840, length=840,
+                 nident=840, slen=840, bitscore=1516)
+    second = _hsp(qstart=29_000, qend=29_840, sstart=1, send=840, length=840,
+                  nident=840, slen=840, bitscore=1500)
+    assert len(merge_hsps([first, second])) == 2
 
 
 def test_merge_hsps_does_not_double_count_overlapping_identity():
@@ -322,13 +349,78 @@ def test_change_type_classification(ref, alt, expected):
     assert _entry(ref=ref, alt=alt).change_type == expected
 
 
-def test_insertion_entry_is_never_called_from_a_substitution_view():
-    """ampC_G-15GG must not match a wild-type G at that position."""
+def test_insertion_entry_is_not_called_on_the_wild_type():
+    """ampC_G-15GG must not match a bare G at that position: nothing is inserted."""
     entry = _entry(ref="G", alt="GG")
     obs = AlignedObservation(observed="G", reference="G", aligned=True)
-    called, note = evaluate(entry, obs)
+    called, _note = evaluate(entry, obs)
     assert called is False
-    assert "insertion" in note
+
+
+def test_insertion_entry_is_called_when_the_query_carries_the_insertion():
+    entry = _entry(ref="G", alt="GG")
+    obs = AlignedObservation(observed="G", reference="G", aligned=True,
+                             inserted_after="G")
+    called, note = evaluate(entry, obs)
+    assert called is True
+    assert note == "insertion"
+
+
+def test_insertion_entry_rejects_a_different_insertion():
+    """ompK36_D135DGD is not satisfied by some other residue inserted at 135."""
+    entry = _entry(ref="D", alt="DGD")
+    obs = AlignedObservation(observed="D", reference="D", aligned=True,
+                             inserted_after="AA")
+    assert evaluate(entry, obs)[0] is False
+
+
+def test_walk_alignment_records_an_insertion_against_the_preceding_position():
+    """Query carries an extra GD after subject position 3."""
+    observations = walk_alignment("ADGDK", "AD--K", 1, 4, {2: None, 3: None},
+                                  nucleotide=False)
+    assert observations[2].observed == "D"
+    assert observations[2].inserted_after == "GD"
+    assert observations[3].inserted_after == ""
+
+
+def test_insertion_in_a_repeat_shifts_to_the_catalogued_position():
+    """The OmpK36 loop-3 duplication, as BLAST actually aligns it.
+
+    Reference ...F132 G133 G134 D135 T136..., query carries an extra GD. The
+    aligner puts the gap after G133; AMRFinderPlus catalogues the same variant
+    as ompK36_D135DGD. Both describe one duplication inside a GD repeat, so the
+    insertion has to be shifted right before it can be compared.
+    """
+    observations = walk_alignment("FGGDGDT", "FG--GDT", 132, 136,
+                                  {133: None, 135: None}, nucleotide=False)
+    assert observations[133].inserted_after == ""
+    assert observations[135].inserted_after == "GD"
+
+    entry = _entry(ref="D", alt="DGD")
+    assert evaluate(entry, observations[135]) == (True, "insertion")
+
+
+def test_copies_spanning_keeps_one_alignment_per_genomic_copy():
+    """A wild-type copy that aligns best must not hide a mutant copy.
+
+    Real case: a chromosome carrying one wild-type blaSHV promoter that aligns
+    at bitscore 537 and a mutant one at 533. Testing only the best alignment
+    reports no mutation at all.
+    """
+    def hsp(bitscore, qstart, qend):
+        return SimpleNamespace(bitscore=bitscore, qstart=qstart, qend=qend,
+                               sstart=1, send=300, qseq="A", sseq="A")
+
+    wild = hsp(537, 2_521_192, 2_521_491)
+    mutant = hsp(533, 14_685, 14_984)
+    partial = hsp(307, 59_269, 59_443)
+    copies = ProteinScreener._copies_spanning([wild, mutant, partial], 87)
+    assert [c.bitscore for c in copies] == [537, 533, 307]
+
+    # Two alignments of the same copy collapse to the strongest.
+    duplicate = hsp(500, 14_690, 14_980)
+    copies = ProteinScreener._copies_spanning([mutant, duplicate], 87)
+    assert [c.bitscore for c in copies] == [533]
 
 
 def test_inserted_bases():
@@ -720,6 +812,57 @@ def test_resistance_score_detects_a_real_esbl(gene):
 def test_resistance_score_excludes_ampc_and_narrow_spectrum(gene):
     _score, flags = resistance_score([_amr_hit(gene, subclass="CEPHALOSPORIN")])
     assert flags["esbl"] is False
+
+
+@pytest.mark.parametrize("gene", ["blaOXA-1", "(Bla)blaOXA-1", "blaOXA-1_1", "OXA-1",
+                                  "blaDHA-1", "DHA-1", "blaSHV-187", "SHV-187"])
+def test_resistance_score_excludes_narrow_spectrum_under_every_database_spelling(gene):
+    """One gene reaches the scorer under one spelling per database.
+
+    NCBI writes blaOXA-1, ARG-ANNOT (Bla)blaOXA-1, ResFinder blaOXA-1_1 and CARD
+    OXA-1. Matching only the first spelling let the other three fall through to
+    the subclass rule and be scored as ESBLs, which put 209 genomes of the
+    validation cohort a whole resistance score above Kleborate.
+    """
+    _score, flags = resistance_score([_amr_hit(gene, subclass="CEPHALOSPORIN")])
+    assert flags["esbl"] is False
+
+
+@pytest.mark.parametrize("gene", ["SHV-12", "blaSHV-12_1", "(Bla)blaCTX-M-15"])
+def test_resistance_score_still_finds_esbls_under_other_spellings(gene):
+    _score, flags = resistance_score([_amr_hit(gene, subclass="CEPHALOSPORIN")])
+    assert flags["esbl"] is True
+
+
+def test_cephalosporin_subclass_alone_does_not_make_an_esbl():
+    """NCBI files blaOXA-1 and blaCTX-M-15 under the same subclass.
+
+    Across the 2188 beta-lactamase alleles NCBI and Kleborate both catalogue,
+    the subclass agrees with the curated ESBL call 76.8% of the time and the
+    family annotation 90.6%, so the subclass cannot be the test.
+    """
+    _score, flags = resistance_score([_amr_hit("blaFOO-1", subclass="CEPHALOSPORIN")])
+    assert flags["esbl"] is False
+
+
+@pytest.mark.parametrize("gene", ["ompK35", "ompK36", "ompC", "oprD"])
+def test_porin_loss_is_not_a_carbapenemase(gene):
+    """Porins are catalogued under a carbapenem subclass but hydrolyse nothing.
+
+    Losing OmpK35 raises the carbapenem MIC, which is why the catalogues file it
+    that way, but the gene being present is not a carbapenemase being present.
+    Counting it scored 95 genomes of the validation cohort as carbapenemase
+    producers that carry none.
+    """
+    _score, flags = resistance_score([_amr_hit(gene, subclass="CARBAPENEM")])
+    assert flags["carbapenemase"] is False
+
+
+def test_esbl_allele_hints_match_exactly_not_by_prefix():
+    """blaSHV-2 is an ESBL; blaSHV-28 is chromosomal and narrow-spectrum."""
+    assert resistance_score([_amr_hit("blaSHV-2")])[1]["esbl"] is True
+    for narrow in ("blaSHV-28", "blaSHV-27", "blaSHV-207", "blaSHV-253"):
+        assert resistance_score([_amr_hit(narrow)])[1]["esbl"] is False, narrow
 
 
 def test_resistance_score_finds_carbapenemases_without_curated_subclass():

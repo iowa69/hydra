@@ -20,9 +20,6 @@ OUTFMT_FIELDS = (
     "qstart", "qend", "sstart", "send", "evalue", "bitscore",
     "slen", "qlen", "gaps", "nident",
 )
-#: Two hits of one reference this far apart on a query are separate copies.
-DEFAULT_SPAN_BUCKET = 10_000
-
 #: Appended when the caller needs the gapped alignment strings (mutation calling).
 ALIGNMENT_FIELDS = ("qseq", "sseq")
 OUTFMT = "6 " + " ".join(OUTFMT_FIELDS)
@@ -244,7 +241,7 @@ def merge_hsps(hsps: Sequence[Hsp], *, max_hsp_gap: int | None = None,
     for hsp in hsps:
         grouped.setdefault((hsp.qseqid, hsp.sseqid, hsp.strand), []).append(hsp)
 
-    best_by_pair: dict[tuple[str, str, int], MergedHit] = {}
+    candidates: dict[tuple[str, str], list[MergedHit]] = {}
     for (qseqid, sseqid, strand), all_hsps in grouped.items():
         slen = all_hsps[0].slen
         # A real locus cannot occupy much more query sequence than the reference
@@ -256,26 +253,68 @@ def merge_hsps(hsps: Sequence[Hsp], *, max_hsp_gap: int | None = None,
         # and report an amplification as a single copy.
         for group in _cluster_by_query(all_hsps, allowed_span):
             _merge_one(group, qseqid, sseqid, strand, slen, allowed_span,
-                       max_hsp_gap, best_by_pair)
-    return list(best_by_pair.values())
+                       max_hsp_gap, candidates.setdefault((qseqid, sseqid), []))
+
+    merged: list[MergedHit] = []
+    for hits in candidates.values():
+        merged.extend(_best_per_locus(hits))
+    return merged
+
+
+def _best_per_locus(hits: list[MergedHit]) -> list[MergedHit]:
+    """Keep the best hit per place on the query, across both strands.
+
+    The same locus is found twice when a gene matches a reference on both
+    orientations, and the stronger orientation should win. Distinct copies of
+    the gene must survive, so hits are separated by where they sit rather than
+    by a fixed-size coordinate bucket - two copies eight kilobases apart share a
+    ten-kilobase bucket, and bucketing would drop one of them.
+    """
+    kept: list[MergedHit] = []
+    for hit in sorted(hits, key=lambda h: h.bitscore, reverse=True):
+        span = (hit.query_start, hit.query_end)
+        length = span[1] - span[0] + 1
+        if any(overlap_length(span, (k.query_start, k.query_end)) > 0.5 * length
+               for k in kept):
+            continue
+        kept.append(hit)
+    return kept
 
 
 def _cluster_by_query(hsps: list[Hsp], allowed_span: int) -> list[list[Hsp]]:
-    """Group HSPs into runs that could belong to the same copy of a locus."""
+    """Group HSPs into runs that could belong to the same copy of a locus.
+
+    Proximity on the query alone is not enough to decide. Two HSPs covering the
+    same stretch of the reference cannot be two pieces of one copy of the gene -
+    they are two copies of it, however close together they sit. A class 1
+    integron carries sul1 twice a few kilobases apart, well inside any
+    distance-based slack, and both copies are real; grouping them would leave
+    the merge step to discard the second as redundant subject territory and
+    report an amplification as a single call.
+    """
     ordered = sorted(hsps, key=lambda h: h.q_lo)
     clusters: list[list[Hsp]] = []
+    claimed: list[list[tuple[int, int]]] = []
     for hsp in ordered:
-        if clusters and hsp.q_lo - max(h.q_hi for h in clusters[-1]) <= allowed_span:
-            clusters[-1].append(hsp)
-        else:
-            clusters.append([hsp])
+        span = (hsp.sub_lo, hsp.sub_hi)
+        length = span[1] - span[0] + 1
+        if clusters:
+            near = hsp.q_lo - max(h.q_hi for h in clusters[-1]) <= allowed_span
+            fresh = all(overlap_length(span, prev) <= 0.5 * length
+                        for prev in claimed[-1])
+            if near and fresh:
+                clusters[-1].append(hsp)
+                claimed[-1].append(span)
+                continue
+        clusters.append([hsp])
+        claimed.append([span])
     return clusters
 
 
 def _merge_one(group: list[Hsp], qseqid: str, sseqid: str, strand: str, slen: int,
                allowed_span: int, max_hsp_gap: int | None,
-               best_by_pair: dict[tuple[str, str, int], MergedHit]) -> None:
-    """Merge one cluster of HSPs into a single hit and record it."""
+               out: list[MergedHit]) -> None:
+    """Merge one cluster of HSPs into a single hit and append it to *out*."""
     group = sorted(group, key=lambda h: h.bitscore, reverse=True)
     kept: list[Hsp] = []
     used: list[tuple[int, int]] = []
@@ -323,13 +362,7 @@ def _merge_one(group: list[Hsp], qseqid: str, sseqid: str, strand: str, slen: in
         bitscore=sum(h.bitscore for h in kept), evalue=min(h.evalue for h in kept),
         n_hsps=len(kept),
     )
-    # Keyed on where the hit sits, not just on the pair: a gene present in
-    # two copies on one contig is two hits, and keying on (query, subject)
-    # alone would report the amplification as a single copy.
-    key = (qseqid, sseqid, merged.query_start // max(1, DEFAULT_SPAN_BUCKET))
-    current = best_by_pair.get(key)
-    if current is None or merged.bitscore > current.bitscore:
-        best_by_pair[key] = merged
+    out.append(merged)
 
 
 def deduplicate(hits: Sequence, *, key_span, key_seq, key_score,

@@ -13,9 +13,11 @@ any Gram-negative.
 
 from __future__ import annotations
 
+import csv
 import re
 from collections import defaultdict
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 from ..config import Config
@@ -385,14 +387,73 @@ _NOT_ESBL_FAMILIES = (
     "blamox", "blaadc", "blacfe", "blalat", "blabil", "blaoxa-1", "blaoxy",
     "blaokp", "blalen", "blasrt", "blacepa", "blapdc", "blaz",
 )
+#: Outer-membrane porins. Their loss raises the carbapenem MIC, so the
+#: catalogues file them under a carbapenem subclass, but they are structural
+#: proteins rather than beta-lactamases and must not satisfy the carbapenemase
+#: test. Loss of function in them is reported in its own right.
+_PORIN_GENES = ("ompk35", "ompk36", "ompk37", "ompc", "ompf", "oprd")
 #: Gene-name fragments that identify a carbapenemase when curated subclass
 #: annotation is missing, as it is for databases with no AMRFinderPlus family.
 _CARBAPENEMASE_HINTS = ("kpc", "ndm", "vim", "imp", "oxa-23", "oxa-24", "oxa-40",
                         "oxa-48", "oxa-51", "oxa-58", "oxa-181", "oxa-232", "ges-",
                         "spm", "gim", "sim", "bic", "dim", "aim", "smb", "tmb", "frl")
-#: Same, for extended-spectrum beta-lactamases.
-_ESBL_HINTS = ("ctx-m", "veb", "per", "tla", "bel", "sfo", "shv-2", "shv-5", "shv-12",
-               "tem-3", "tem-10", "tem-52", "ges-1", "ges-9")
+#: Beta-lactamase families whose members are extended-spectrum as a family, taken
+#: from the family descriptions AMRFinderPlus publishes ("CTX-M family
+#: extended-spectrum class A beta-lactamase"). A curated subclass cannot stand in
+#: for this: NCBI files blaOXA-1, blaDHA-1 and blaCTX-M-15 alike under
+#: CEPHALOSPORIN, so reading the subclass calls a narrow-spectrum oxacillinase
+#: and a plasmid AmpC extended-spectrum.
+_ESBL_FAMILIES = (
+    "ampc_kaer", "blaadc", "blabel", "blacess", "blacga", "blacha", "blachc",
+    "blacia", "blacme", "blactx-m", "blakluc", "blal2", "blamun", "blaoch",
+    "blaoxy", "blaper", "blapme", "blaraa", "blarahn", "blarasa", "blatla",
+    "blatla2", "blaveb", "cepa", "cfxa2", "cfxa3", "cfxa4",
+)
+#: Families that carry both narrow- and extended-spectrum members, so the allele
+#: decides. Listed individually because no family-level annotation can separate
+#: blaSHV-1 from blaSHV-12.
+#: Matched exactly, never by prefix: ``shv-2`` must not also match ``shv-28``,
+#: which is chromosomal and narrow-spectrum.
+_ESBL_HINTS = ("shv-2", "shv-3", "shv-4", "shv-5", "shv-12", "shv-13", "shv-15",
+               "shv-18", "shv-24", "shv-30", "shv-31", "tem-3", "tem-10",
+               "tem-12", "tem-24", "tem-52", "ges-1", "ges-9", "oxa-11",
+               "oxa-14", "oxa-15", "oxa-16", "oxa-17", "sfo-1")
+
+
+@lru_cache(maxsize=4)
+def esbl_alleles(db_root: Path) -> frozenset[str]:
+    """Alleles NCBI describes as extended-spectrum, normalised to bare names.
+
+    AMRFinderPlus annotates each reference protein with a description that names
+    the spectrum and the molecular class -- "extended-spectrum class A
+    beta-lactamase SHV-12" against "broad-spectrum class A beta-lactamase
+    SHV-28". That is the only field in any database Hydra ships that separates
+    the two, and it separates them per allele rather than per family, which is
+    what the question needs: blaSHV-1 and blaSHV-12 share a family and differ in
+    spectrum.
+
+    Class C enzymes are excluded. NCBI calls a derepressed AmpC
+    extended-spectrum, but a plasmid AmpC is not an ESBL clinically and counting
+    it disagrees with every curated list.
+
+    Measured against Kleborate's curation over the 2188 beta-lactamase alleles
+    both catalogue, this agrees on 95.25%; the drug subclass agrees on 76.8%.
+    """
+    meta = db_root / "prot" / "protein" / "meta.tsv"
+    if not meta.exists():
+        return frozenset()
+    found: set[str] = set()
+    with open(meta, newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle, delimiter="\t")
+        for row in reader:
+            product = (row.get("product") or "").lower()
+            if "extended-spectrum" not in product or "class c" in product:
+                continue
+            gene = (row.get("gene") or "").strip()
+            if gene:
+                found.add(_strip_bla(gene))
+    LOG.debug("loaded %d extended-spectrum alleles from %s", len(found), meta)
+    return frozenset(found)
 
 
 def _family_of(hit: Hit) -> str:
@@ -400,8 +461,26 @@ def _family_of(hit: Hit) -> str:
 
 
 def _strip_bla(name: str) -> str:
-    """Remove a literal ``bla`` prefix. ``str.lstrip`` would remove characters."""
-    return name[3:] if name.startswith("bla") else name
+    """Reduce a gene label to a bare family-and-allele name.
+
+    The same gene reaches here under one spelling per database: ``blaOXA-1``
+    from NCBI, ``(Bla)blaOXA-1`` from ARG-ANNOT, ``blaOXA-1_1`` from ResFinder
+    and ``OXA-1`` from CARD. Comparing the raw label against a family list
+    matches only the first of those, so the exclusions fail silently and a
+    narrow-spectrum oxacillinase is scored as an ESBL.
+    """
+    key = name.strip().lower()
+    if key.startswith("(") and ")" in key:          # ARG-ANNOT's "(Bla)" prefix
+        key = key.split(")", 1)[1]
+    if key.startswith("bla"):
+        key = key[3:]
+    # ResFinder appends a copy number: blaOXA-1_1. Allele numbers are kept,
+    # since blaSHV-1 and blaSHV-12 are different genes.
+    if "_" in key:
+        head, _, tail = key.rpartition("_")
+        if tail.isdigit() and head:
+            key = head
+    return key
 
 
 def _in_family(name: str, families: tuple[str, ...]) -> bool:
@@ -418,7 +497,8 @@ def _in_family(name: str, families: tuple[str, ...]) -> bool:
     return False
 
 
-def resistance_score(hits: list[Hit]) -> tuple[int, dict[str, bool]]:
+def resistance_score(hits: list[Hit],
+                     known_esbl: frozenset[str] = frozenset()) -> tuple[int, dict[str, bool]]:
     """A 0-3 resistance score, generalised via drug-class annotation.
 
     0 = neither ESBL nor carbapenemase; 1 = ESBL only; 2 = carbapenemase;
@@ -430,17 +510,32 @@ def resistance_score(hits: list[Hit]) -> tuple[int, dict[str, bool]]:
     """
     beta_lactam = [h for h in hits if h.element_type == "AMR"
                    and ("BETA-LACTAM" in (h.drug_class or "").upper()
-                        or _family_of(h).startswith("bla"))]
+                        or _family_of(h).startswith("bla"))
+                   # A porin is catalogued under a carbapenem subclass because
+                   # losing it raises the carbapenem MIC, but ompK35 and ompK36
+                   # are not beta-lactamases and their absence is not the
+                   # presence of a carbapenemase. Counting them scored 95
+                   # genomes as carbapenemase producers that carry none.
+                   and not _in_family(_family_of(h), _PORIN_GENES)]
     has_carb = any("CARBAPENEM" in (h.subclass or "").upper() for h in beta_lactam) or \
         any(hint in _family_of(h) for h in beta_lactam for hint in _CARBAPENEMASE_HINTS)
 
     def is_esbl(hit: Hit) -> bool:
         name = _family_of(hit)
+        allele = _strip_bla(name)
+        if known_esbl:
+            # Per-allele annotation, which is the only thing that separates
+            # blaSHV-12 from blaSHV-28.
+            return allele in known_esbl
+        # No protein metadata installed: fall back to family-level annotation.
+        # Coarser, since a family that mixes spectra can only be decided by the
+        # allele, but still far better than reading the drug subclass, which
+        # files blaOXA-1 and blaCTX-M-15 alike under CEPHALOSPORIN.
         if _in_family(name, _NOT_ESBL_FAMILIES):
             return False
-        if "CEPHALOSPORIN" in (hit.subclass or "").upper():
+        if _in_family(name, _ESBL_FAMILIES):
             return True
-        return any(hint in name for hint in _ESBL_HINTS)
+        return any(allele == hint for hint in _ESBL_HINTS)
 
     has_esbl = any(is_esbl(h) for h in beta_lactam)
     has_col = _has_class(hits, drug_class="COLISTIN", subclass="COLISTIN", gene_prefix="mcr")

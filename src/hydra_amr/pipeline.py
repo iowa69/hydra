@@ -19,7 +19,8 @@ from .records import Hit, SampleResult
 from .seqio import (assembly_stats, fastq_stats, read_fasta, validate_fasta,
                     validate_fastq)
 from .typing.cassette import CassetteTyper
-from .typing.lineage import LineageTyper, resistance_score, virulence_score
+from .typing.lineage import (LineageTyper, esbl_alleles, resistance_score,
+                             virulence_score)
 from .typing.mlst import MlstTyper
 from .typing.species import SpeciesIdentifier
 from .utils import LOG, HydraError, check_workspace, human_time
@@ -601,7 +602,8 @@ class Pipeline:
         result.hits = unique
         self._resolve_loci(result)
 
-        score, flags = resistance_score([h for h in result.hits if h.primary])
+        score, flags = resistance_score([h for h in result.hits if h.primary],
+                                        esbl_alleles(self.store.root))
         result.scores["resistance_score"] = score
         result.scores["has_esbl"] = flags["esbl"]
         result.scores["has_carbapenemase"] = flags["carbapenemase"]
