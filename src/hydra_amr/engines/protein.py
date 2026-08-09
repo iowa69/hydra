@@ -70,8 +70,74 @@ LOSS_OF_FUNCTION: dict[str, dict] = {
         "organisms": _KPSC, "class": "TIGECYCLINE", "subclass": "TIGECYCLINE",
         "intact_coverage": 90.0, "min_partial_coverage": 20.0, "min_identity": 90.0,
     },
+    # oqxR represses the OqxAB efflux pump, so losing it raises the MIC of
+    # everything the pump exports at once.
+    "oqxR": {
+        "organisms": _KPSC,
+        "class": "NITROFURAN/PHENICOL/QUINOLONE/TETRACYCLINE",
+        "subclass": "NITROFURANTOIN/PHENICOL/QUINOLONE/TIGECYCLINE",
+        "intact_coverage": 90.0, "min_partial_coverage": 20.0, "min_identity": 90.0,
+    },
 }
 
+
+
+def query_frame(hsp: Hsp) -> int:
+    """The reading frame a translated alignment sits in, 1..3 or -1..-3."""
+    if hsp.qend >= hsp.qstart:
+        return ((hsp.qstart - 1) % 3) + 1
+    return -(((hsp.qlen - hsp.qstart) % 3) + 1)
+
+
+def frameshifted(hsps: list[Hsp], reference_length: int) -> bool:
+    """True when the alignments at one locus change reading frame.
+
+    A frameshift is invisible to a coverage test. An indel of one or two bases
+    near the start of a gene destroys everything downstream, but the downstream
+    part still aligns to the reference in a different frame, so the pieces tile
+    the reference and the gene reads as complete: ompK35 broken at residue 29
+    still covers 92% of its reference in a single stretch and passes any
+    "intact" threshold.
+
+    Two alignments of one reference, adjacent at one locus but in different
+    reading frames, are the frameshift itself. Requiring them to be adjacent is
+    what separates this from a second, intact copy of the gene elsewhere, which
+    may sit in any frame for reasons that have nothing to do with disruption.
+    """
+    ordered = sorted(hsps, key=lambda h: min(h.qstart, h.qend))
+    for left, right in zip(ordered, ordered[1:]):
+        gap = min(right.qstart, right.qend) - max(left.qstart, left.qend)
+        # Within one gene's span: the pieces of a broken gene stay together.
+        if not -60 <= gap <= reference_length * 3:
+            continue
+        if query_frame(left) != query_frame(right):
+            return True
+    return False
+
+
+def premature_stop(hsp: Hsp, reference_length: int, cutoff: float = 0.95) -> int:
+    """Reference position of the first in-frame stop, or 0 if there is none.
+
+    ``blastx`` aligns straight through a stop codon and writes it as ``*`` in the
+    translated query, so a nonsense mutation leaves full-length coverage at high
+    identity and is invisible to any coverage or identity test: ompK35 stopped at
+    residue 138 of 359 still aligns over the whole reference at 99.7%.
+
+    Only a stop before *cutoff* of the reference counts. The last codon of a
+    protein is a stop in every genome and means nothing.
+    """
+    if not hsp.qseq or not hsp.sseq or not reference_length:
+        return 0
+    limit = reference_length * cutoff
+    step = 1 if hsp.send >= hsp.sstart else -1
+    position = hsp.sstart
+    for query_residue, subject_residue in zip(hsp.qseq, hsp.sseq):
+        if subject_residue == "-":
+            continue
+        if query_residue == "*" and position <= limit:
+            return position
+        position += step
+    return 0
 
 
 def loss_of_function_call(gene: str, organism: str | None,
@@ -176,10 +242,13 @@ class ProteinScreener:
         makeblastdb(query, "prot")
         hsps = blast(
             "blastx", batch.path, query, workdir / "lossoffunction.blastx.tsv",
-            threads=threads, evalue=1e-3, max_target_seqs=10000,
+            threads=threads, evalue=1e-3, max_target_seqs=10000, with_alignment=True,
             extra=["-query_gencode", "11", "-comp_based_stats", "0"],
         )
         best: dict[tuple, tuple] = {}
+        #: Every qualifying alignment per locus, kept so a change of reading
+        #: frame can be seen. The best-coverage hit alone cannot show one.
+        by_contig: dict[tuple, list[Hsp]] = {}
         for hsp in hsps:
             meta = handle.meta_for(hsp.sseqid)
             if not meta:
@@ -202,17 +271,39 @@ class ProteinScreener:
             key = (piece.sample, gene)
             if key not in best or coverage > best[key][0]:
                 best[key] = (coverage, hsp, piece, meta)
+            by_contig.setdefault((piece.sample, gene, piece.contig), []).append(hsp)
 
         out: dict[str, list[Hit]] = {}
         for (sample, gene), (coverage, hsp, piece, meta) in best.items():
             rule = LOSS_OF_FUNCTION[gene]
+            broken_frame = any(
+                frameshifted(group, hsp.slen)
+                for (s, g, _contig), group in by_contig.items()
+                if s == sample and g == gene)
+            stop_at = premature_stop(hsp, hsp.slen)
             # Organism-scoped, like the mutation catalogues. mgrB disruption means
             # colistin resistance in Klebsiella; in an organism where that has not
             # been established -- or where the species call names none -- it means
             # nothing and is not reported.
-            if not loss_of_function_call(gene, organism_by_sample.get(sample),
-                                         coverage, hsp.pident):
+            organism = organism_by_sample.get(sample)
+            truncated = loss_of_function_call(gene, organism, coverage, hsp.pident)
+            # A frameshift is disruption whatever the coverage says, but the
+            # organism gate and the identity floor still apply: a paralogue
+            # aligning in two frames is not this gene breaking.
+            credible = (organism in rule["organisms"]
+                        and hsp.pident >= rule["min_identity"])
+            broken = truncated or ((broken_frame or stop_at) and credible)
+            if not broken:
                 continue
+            if truncated:
+                reason, detail = "truncated", (
+                    f"longest aligned stretch covers {coverage:.0f}% of the reference")
+            elif stop_at:
+                reason, detail = "nonsense", (
+                    f"stop codon at reference residue {stop_at} of {hsp.slen}")
+            else:
+                reason, detail = "frameshifted", (
+                    "alignments at this locus change reading frame")
             out.setdefault(sample, []).append(Hit(
                 sample=sample, database="protein", gene=gene,
                 accession=meta.get("accession", ""), product=meta.get("product", ""),
@@ -224,8 +315,7 @@ class ProteinScreener:
                 coverage_pct=coverage, identity_pct=hsp.pident,
                 gaps=hsp.gaps, bitscore=hsp.bitscore,
                 method="DISRUPTX", resolution="PARTIAL",
-                note=(f"{gene} truncated: longest aligned stretch covers "
-                      f"{coverage:.0f}% of the reference; loss of function confers "
+                note=(f"{gene} {reason}: {detail}; loss of function confers "
                       f"{rule['class'].lower()} resistance"),
             ))
         return out
@@ -273,7 +363,15 @@ class ProteinScreener:
             results.setdefault(sample, []).extend(hits)
         for sample, hits in self._loss_of_function(batch, handle, workdir,
                                                    organism_by_sample, threads).items():
-            results.setdefault(sample, []).extend(hits)
+            # One lesion, one row. A catalogued nonsense mutation is found twice
+            # over -- once by the mutation caller as ompK36_W125Ter and once here
+            # as a stop at residue 125 - and reporting both says the gene is
+            # broken twice.
+            catalogued = {(hit.gene, hit.note.split()[0]) for hit in mutation_hits.get(sample, [])}
+            stops = {gene for gene, symbol in catalogued if symbol.endswith(("Ter", "*"))}
+            results.setdefault(sample, []).extend(
+                hit for hit in hits
+                if not ("nonsense" in hit.note and hit.gene in stops))
         return results
 
     def _call_genes(self, batch: QueryBatch, hsps: list[Hsp], handle,
@@ -424,7 +522,8 @@ class ProteinScreener:
                 (min(h.sstart, h.send), max(h.sstart, h.send)) for h in group))
             if reference_length and 100.0 * covered / reference_length < thresholds.mutation_min_coverage:
                 continue
-            calls = self._match_entries(group, entries, reference_length, nucleotide=False)
+            calls = self._match_entries(group, entries, reference_length, nucleotide=False,
+                                        min_identity=thresholds.mutation_min_identity)
             for entry, obs, hsp in calls:
                 # One row per mutation per sample, from the strongest copy that
                 # carries it; groups are visited best-scoring first.
@@ -450,7 +549,8 @@ class ProteinScreener:
         return out
 
     @staticmethod
-    def _copies_spanning(group: list[Hsp], position: int) -> list[Hsp]:
+    def _copies_spanning(group: list[Hsp], position: int,
+                         min_identity: float = 0.0) -> list[Hsp]:
         """One best alignment per distinct copy of the locus covering *position*.
 
         A genome often carries the same reference locus more than once, and the
@@ -460,12 +560,18 @@ class ProteinScreener:
         happens to be the wild type, so every copy is tested and the mutation is
         called if any of them carries it.
 
+        Since every copy gets a vote, each has to be a credible copy. An
+        alignment below *min_identity* is a paralogue or a chance match rather
+        than the gene, and a residue read off one is not evidence: a topoisomerase
+        aligning to parC at 36% identity will happily show a serine at position
+        80 and turn a mutation call into a coin toss.
+
         Copies are separated on the query, and only the best alignment of each is
-        kept, so a fragmentary or spurious HSP cannot vote on the residue.
+        kept, so a fragmentary HSP cannot outvote the real one.
         """
         spanning = [hsp for hsp in group
                     if min(hsp.sstart, hsp.send) <= position <= max(hsp.sstart, hsp.send)
-                    and hsp.qseq]
+                    and hsp.qseq and hsp.pident >= min_identity]
         copies: list[Hsp] = []
         for hsp in sorted(spanning, key=lambda h: h.bitscore, reverse=True):
             lo, hi = min(hsp.qstart, hsp.qend), max(hsp.qstart, hsp.qend)
@@ -477,7 +583,8 @@ class ProteinScreener:
         return copies
 
     @staticmethod
-    def _match_entries(group: list[Hsp], entries, reference_length: int, *, nucleotide: bool):
+    def _match_entries(group: list[Hsp], entries, reference_length: int, *,
+                       nucleotide: bool, min_identity: float = 0.0):
         """Test every catalogue entry against each copy of the locus it sits in."""
         calls = []
         for entry in entries:
@@ -485,7 +592,7 @@ class ProteinScreener:
             if position < 0 and reference_length:
                 position = reference_length + position + 1
             span = max(1, len(entry.ref)) if entry.is_deletion else 1
-            for hsp in ProteinScreener._copies_spanning(group, position):
+            for hsp in ProteinScreener._copies_spanning(group, position, min_identity):
                 if span > 1:
                     obs = multi_residue(hsp.qseq, hsp.sseq, hsp.sstart, hsp.send,
                                         position, span, nucleotide=nucleotide)
@@ -555,7 +662,8 @@ class ProteinScreener:
             if reference_length and 100.0 * covered / reference_length < thresholds.mutation_min_coverage:
                 continue
             entries = catalog.dna[sseqid]
-            calls = self._match_entries(group, entries, reference_length, nucleotide=True)
+            calls = self._match_entries(group, entries, reference_length, nucleotide=True,
+                                        min_identity=thresholds.mutation_min_identity)
             for entry, obs, hsp in calls:
                 # One row per mutation per sample, from whichever copy supports
                 # it most strongly; groups are visited best-scoring first.

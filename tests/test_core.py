@@ -18,7 +18,9 @@ from hydra_amr.engines.blast import (Hsp, deduplicate, interval_length, merge_hs
 from hydra_amr.engines.mutations import (AlignedObservation, MutationEntry, _parse_symbol,
                                          evaluate, reference_index, walk_alignment)
 from hydra_amr.engines.nucl import build_query_batch
-from hydra_amr.engines.protein import ProteinScreener, loss_of_function_call
+from hydra_amr.engines.protein import (ProteinScreener, frameshifted,
+                                       loss_of_function_call, premature_stop,
+                                       query_frame)
 from hydra_amr.engines.reads import (LocusConsensus, ReadMapper, ReadSet, Variant, _annotate_codons,
                                      is_multicopy_rrna,
                                      _base_counts, _count_alt, _indel_count, _looks_like_cds,
@@ -407,9 +409,9 @@ def test_copies_spanning_keeps_one_alignment_per_genomic_copy():
     at bitscore 537 and a mutant one at 533. Testing only the best alignment
     reports no mutation at all.
     """
-    def hsp(bitscore, qstart, qend):
+    def hsp(bitscore, qstart, qend, pident=99.0):
         return SimpleNamespace(bitscore=bitscore, qstart=qstart, qend=qend,
-                               sstart=1, send=300, qseq="A", sseq="A")
+                               sstart=1, send=300, qseq="A", sseq="A", pident=pident)
 
     wild = hsp(537, 2_521_192, 2_521_491)
     mutant = hsp(533, 14_685, 14_984)
@@ -421,6 +423,74 @@ def test_copies_spanning_keeps_one_alignment_per_genomic_copy():
     duplicate = hsp(500, 14_690, 14_980)
     copies = ProteinScreener._copies_spanning([mutant, duplicate], 87)
     assert [c.bitscore for c in copies] == [533]
+
+
+def test_frameshift_detected_when_alignments_change_reading_frame():
+    """ompK35 broken at residue 29, exactly as BLAST reports it.
+
+    The two pieces tile the reference and the longer one covers 92% of it in a
+    single stretch, so every coverage-based test calls the gene intact. The
+    change of reading frame between them is the frameshift.
+    """
+    def hsp(qstart, qend, sstart, send, pident=99.7):
+        return SimpleNamespace(qstart=qstart, qend=qend, sstart=sstart, send=send,
+                               qlen=5_000_000, pident=pident, slen=359)
+
+    head = hsp(3_570_610, 3_570_693, 1, 28, 100.0)
+    tail = hsp(3_570_690, 3_571_685, 28, 359)
+    assert query_frame(head) != query_frame(tail)
+    assert frameshifted([head, tail], 359) is True
+
+
+def test_intact_gene_in_one_frame_is_not_frameshifted():
+    def hsp(qstart, qend, sstart, send):
+        return SimpleNamespace(qstart=qstart, qend=qend, sstart=sstart, send=send,
+                               qlen=5_000_000, pident=99.0, slen=359)
+
+    assert frameshifted([hsp(1_000, 1_080, 1, 27),
+                         hsp(1_081, 2_074, 28, 359)], 359) is False
+
+
+def test_a_separate_copy_elsewhere_is_not_a_frameshift():
+    """Two intact copies far apart may sit in any frames; that is not disruption."""
+    def hsp(qstart, qend):
+        return SimpleNamespace(qstart=qstart, qend=qend, sstart=1, send=359,
+                               qlen=5_000_000, pident=99.0, slen=359)
+
+    assert frameshifted([hsp(1_000, 2_077), hsp(900_000, 900_001 + 1076)], 359) is False
+
+
+def test_premature_stop_found_in_a_full_length_alignment():
+    """ompK35_W138Ter: full coverage, 99.7% identity, and the protein ends at 138."""
+    hsp = SimpleNamespace(qseq="MK" + "A" * 135 + "*" + "A" * 221,
+                          sseq="MK" + "A" * 135 + "W" + "A" * 221,
+                          sstart=1, send=359)
+    assert premature_stop(hsp, 359) == 138
+
+
+def test_terminal_stop_is_not_a_premature_stop():
+    """Every protein ends in a stop codon; that is not a nonsense mutation."""
+    hsp = SimpleNamespace(qseq="A" * 358 + "*", sseq="A" * 359,
+                          sstart=1, send=359)
+    assert premature_stop(hsp, 359) == 0
+
+
+def test_copies_spanning_ignores_alignments_below_the_identity_floor():
+    """A paralogue is not a copy of the gene, and its residues are not evidence.
+
+    Taken from a genome where a topoisomerase aligned to parC at 36% identity
+    and showed a serine at position 80, which was reported as parC_S80I.
+    """
+    def hsp(bitscore, qstart, qend, pident):
+        return SimpleNamespace(bitscore=bitscore, qstart=qstart, qend=qend,
+                               sstart=1, send=300, qseq="A", sseq="A", pident=pident)
+
+    real = hsp(500, 1_000, 1_900, 99.0)
+    paralogue = hsp(120, 40_000, 40_900, 36.0)
+    copies = ProteinScreener._copies_spanning([real, paralogue], 87, 90.0)
+    assert [c.pident for c in copies] == [99.0]
+    # With no floor configured, behaviour is unchanged.
+    assert len(ProteinScreener._copies_spanning([real, paralogue], 87)) == 2
 
 
 def test_inserted_bases():
