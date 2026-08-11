@@ -10,7 +10,7 @@ import sys
 from dataclasses import replace
 from pathlib import Path
 
-from . import __version__, presets
+from . import __version__, banner, presets
 from .config import (CELL_MODES, ELEMENT_TYPES, FORMAT_ALIASES, MATRIX_FIELDS,
                      OUTPUT_FORMATS, Config, Thresholds, default_db_dir)
 from .db.fetch import can_fetch
@@ -48,8 +48,21 @@ examples:
 presets:
 {presets.describe()}
 
-Hydra v{__version__}
+Hydra v{__version__} - written by {banner.CREDIT}
 """
+
+
+class _VersionAction(argparse.Action):
+    """``--version`` prints the banner, so the credit travels with the version."""
+
+    def __init__(self, option_strings, dest, **kwargs):
+        super().__init__(option_strings, dest, nargs=0, default=argparse.SUPPRESS, **kwargs)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        print(banner.render_for(sys.stdout))
+        # The plain line stays, so `hydra --version | awk '{print $2}'` still works.
+        print(f"\nhydra {__version__}")
+        parser.exit()
 
 
 # --------------------------------------------------------------------- helpers
@@ -88,6 +101,8 @@ def _add_common(parser: argparse.ArgumentParser) -> None:
     runtime.add_argument("-v", "--verbose", action="count", default=0,
                          help="verbose logging (repeat for more)")
     runtime.add_argument("-q", "--quiet", action="store_true", help="only warnings and errors")
+    runtime.add_argument("--no-banner", action="store_true",
+                         help="do not print the start-up banner (also $HYDRA_NO_BANNER)")
 
 
 def _add_inputs(parser: argparse.ArgumentParser) -> None:
@@ -578,6 +593,7 @@ def cmd_run(args) -> int:
 
         meta = {
             "hydra_version": __version__,
+            "author": banner.CREDIT,
             "databases": {name: store.installed().get(name, {}).get("version", "")
                           for name in databases},
             "thresholds": vars(config.thresholds),
@@ -1015,7 +1031,8 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=EPILOG,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("--version", action="version", version=f"hydra {__version__}")
+    parser.add_argument("--version", action=_VersionAction,
+                        help="show the version and exit")
     subparsers = parser.add_subparsers(dest="command", metavar="COMMAND")
 
     run_parser = subparsers.add_parser(
@@ -1106,6 +1123,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     setup_logging(getattr(args, "verbose", 0), getattr(args, "quiet", False))
+    banner.show(enabled=not getattr(args, "quiet", False)
+                and not getattr(args, "no_banner", False))
 
     if not getattr(args, "command", None):
         parser.print_help()

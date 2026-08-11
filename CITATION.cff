@@ -3,8 +3,9 @@ title: "Hydra: unified AMR, virulence, point-mutation, heteroresistance, MLST an
 message: "If you use Hydra, please cite it and the reference databases it screened against (hydra db info NAME prints each one's citation)."
 type: software
 authors:
-  - given-names: "Hydra contributors"
-    affiliation: ""
+  - given-names: "Giovanni"
+    family-names: "Lorenzin"
+    affiliation: "IOWA-BioTech"
 repository-code: "https://github.com/iowa69/hydra"
 url: "https://github.com/iowa69/hydra"
 abstract: >-

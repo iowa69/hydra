@@ -6,4 +6,6 @@ lineage typing, from bacterial assemblies or raw reads.
 """
 
 __version__ = "1.4.0"
-__all__ = ["__version__"]
+__author__ = "Giovanni Lorenzin"
+__organisation__ = "IOWA-BioTech"
+__all__ = ["__version__", "__author__", "__organisation__"]

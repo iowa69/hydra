@@ -10,7 +10,8 @@ readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.9"
-authors = [{name = "Hydra developers"}]
+authors = [{name = "Giovanni Lorenzin"}]
+maintainers = [{name = "Giovanni Lorenzin"}]
 keywords = ["amr", "antimicrobial resistance", "mlst", "virulence", "bacteria", "genomics"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",

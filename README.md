@@ -5,6 +5,11 @@
 <h1 align="center">Hydra</h1>
 
 <p align="center">
+  <em>many heads, one genome</em><br>
+  by <strong>Giovanni Lorenzin</strong> · IOWA-BioTech
+</p>
+
+<p align="center">
   <strong>Acquired resistance and virulence genes, resistance point mutations,
   heteroresistance from reads, MLST, SCCmec and lineage typing —<br>
   one command, one table, one pass over one set of databases.</strong>
@@ -211,6 +216,7 @@ A preset only sets defaults; anything passed explicitly wins.
 | `--keep-temp` | off | keep intermediate BLAST/BAM files for debugging |
 | `-v`, `--verbose` | off | verbose logging (repeat for more) |
 | `-q`, `--quiet` | off | only warnings and errors |
+| `--no-banner` | off | do not print the start-up banner (also `$HYDRA_NO_BANNER`) |
 
 ### Commands
 
@@ -368,6 +374,7 @@ Full detail, every comparator and every sample screened:
 
 ## Licence
 
-MIT. The reference databases carry their own licences and citations —
+MIT, © 2026 Giovanni Lorenzin, IOWA-BioTech. The reference databases carry
+their own licences and citations —
 `hydra db download --list` prints each one, `hydra db info NAME` prints them
 individually.

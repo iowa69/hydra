@@ -1,5 +1,7 @@
 # Validation
 
+Giovanni Lorenzin, IOWA-BioTech
+
 The full record behind the summary in the [README](../README.md): every arm, every comparator, and the reasoning behind each measurement.
 
 ## Overview

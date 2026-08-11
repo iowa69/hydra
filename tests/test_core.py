@@ -1549,3 +1549,61 @@ def test_readme_performance_block_matches_metrics():
         [sys.executable, str(sync), str(metrics), str(readme), "--check"],
         capture_output=True, text=True)
     assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_banner_is_drawn_square_and_carries_the_credit():
+    """The logo and wordmark are hand-drawn, so a stray character shows up here."""
+    from hydra_amr import __author__, __organisation__, banner
+    plain = banner.render(colour=False)
+    art, _, byline = plain.partition("\n\n")
+    rows = art.split("\n")
+    assert len(rows) == 5
+    # Both drawings are rectangular, so the two blocks stay in their columns.
+    for row, logo, mark in zip(rows, banner._LOGO, banner._WORDMARK):
+        assert row.startswith("  " + logo)
+        assert row.rstrip() == f"  {logo}   {mark}".rstrip()
+    assert {len(line) for line in banner._LOGO} == {17}
+    assert {len(line) for line in banner._WORDMARK} == {33}
+    assert __author__ in byline and __organisation__ in byline
+    assert "\033" not in plain
+
+
+def test_banner_colour_is_opt_in_and_always_closed():
+    from hydra_amr import banner
+    coloured = banner.render(colour=True)
+    assert "\033[36m" in coloured and "\033[1m" in coloured
+    # Every colour opened is closed again, or the rest of the terminal inherits it.
+    assert coloured.count("\033[0m") == (coloured.count("\033[36m")
+                                         + coloured.count("\033[1m")
+                                         + coloured.count("\033[2m"))
+
+
+def test_banner_never_reaches_stdout(capsys, monkeypatch):
+    """`hydra screen --stdout` pipes a TSV table; a banner in it would corrupt it."""
+    from hydra_amr import banner
+    monkeypatch.delenv("HYDRA_NO_BANNER", raising=False)
+    banner.show()
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "Lorenzin" in captured.err
+
+    banner.show(enabled=False)
+    assert capsys.readouterr().err == ""
+
+    monkeypatch.setenv("HYDRA_NO_BANNER", "1")
+    banner.show()
+    assert capsys.readouterr().err == ""
+
+
+def test_attribution_is_single_sourced():
+    """One name, spelled the same way in the package, the licence and the citation."""
+    from hydra_amr import __author__, __organisation__, banner
+    assert banner.AUTHOR == __author__ and banner.ORGANISATION == __organisation__
+    assert banner.CREDIT == f"{__author__}, {__organisation__}"
+    root = Path(__file__).resolve().parent.parent
+    for name in ("README.md", "LICENSE", "CITATION.cff", "pyproject.toml"):
+        path = root / name
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf-8")
+        assert "Lorenzin" in text, f"{name} does not name the author"

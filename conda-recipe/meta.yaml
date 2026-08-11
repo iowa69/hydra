@@ -135,6 +135,8 @@ about:
     `hydra db bundle` packs them for machines that have neither that data nor a
     network.
 
+    Written by Giovanni Lorenzin, IOWA-BioTech.
+
   doc_url: https://github.com/iowa69/hydra#readme
   dev_url: https://github.com/iowa69/hydra
 
