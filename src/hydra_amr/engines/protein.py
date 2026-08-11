@@ -15,8 +15,8 @@ from pathlib import Path
 from ..config import Config
 from ..db.manager import DatabaseStore, makeblastdb
 from ..records import Hit
-from ..seqio import read_fasta
-from ..utils import LOG, natural_key
+from ..seqio import read_fasta, read_fasta_dict, read_fasta_subset
+from ..utils import LOG, natural_key, revcomp, translate
 from .blast import (Hsp, blast, check_db_exists, deduplicate, interval_length,
                     merge_hsps, merge_intervals, overlap_length)
 from .mutations import MutationCatalog, evaluate, multi_residue, walk_alignment
@@ -138,6 +138,79 @@ def premature_stop(hsp: Hsp, reference_length: int, cutoff: float = 0.95) -> int
             return position
         position += step
     return 0
+
+
+#: Shortest unaligned end worth reading the DNA for.
+EDGE_MIN_MISSING = 5
+
+
+def edge_frameshift(reference: str, query: str, hsp: Hsp, probe: int = 6,
+                    min_missing: int = EDGE_MIN_MISSING, max_missing: int = 40) -> str:
+    """Which end of a gene falls out of frame -- ``"N"``, ``"C"`` or ``""``.
+
+    :func:`frameshifted` needs two alignments of one reference in different
+    frames, and blastx supplies them only when both pieces score. A gene
+    frameshifted within its first few codons has no second piece: the fragment
+    is 10 or 15 residues long and never reaches the reporting threshold, so the
+    lesion comes back as a *single* clean alignment that simply starts late.
+    ``ompK35`` broken at codon 12 aligns from residue 15 to 359 at 100%
+    identity, which no coverage or identity test can tell from an intact gene
+    whose N-terminus went unaligned.
+
+    What separates them is the DNA that blastx could not score. The two ends
+    fail differently, so they are tested differently:
+
+    ``N``  the reference's first residues are still there, immediately upstream,
+           but in one of the other two reading frames. The start codon exists
+           and the body of the gene is not in frame with it.
+    ``C``  translating in frame past the end of the alignment runs into a stop
+           before the reference ends, reading residues that are not the
+           reference's. A gene whose last residues are merely absent, with no
+           novel sequence before the stop, is a short allele and is not
+           reported.
+
+    Both are bounded by *max_missing*, and the bound is the whole point of the
+    test rather than a safety margin. What justifies reading the DNA at all is
+    that the missing piece is too short for blastx to score; a piece of 40
+    residues or more would have been reported as its own alignment, and
+    :func:`frameshifted` would already have two frames to compare. Past that
+    bound the unaligned part is not an unscored fragment but a gene in pieces,
+    which is the truncation rule's business: without the bound a locus aligning
+    over 46 of 359 residues was called frameshifted on the strength of a
+    six-residue probe found somewhere in 900 bases of flank.
+    """
+    if not reference or not query or not hsp.slen:
+        return ""
+    # A translated search walks the protein forwards; anything else is not an
+    # alignment these tests can read.
+    if hsp.send < hsp.sstart:
+        return ""
+    plus = hsp.qend >= hsp.qstart
+
+    missing = reference[:hsp.sstart - 1]
+    if min_missing <= len(missing) <= max_missing:
+        width = 3 * (len(missing) + 6)
+        flank = (query[max(0, hsp.qstart - 1 - width):hsp.qstart - 1] if plus
+                 else revcomp(query[hsp.qstart:hsp.qstart + width]))
+        # Trim from the far end so the last codon of the flank abuts the
+        # alignment: frame 0 is then the alignment's own frame.
+        flank = flank[len(flank) % 3:]
+        if len(flank) >= 3 * min_missing:
+            head = missing[:probe]
+            if head not in translate(flank, False) and any(
+                    head in translate(flank[shift:], False) for shift in (1, 2)):
+                return "N"
+
+    missing = reference[hsp.send:]
+    if min_missing <= len(missing) <= max_missing:
+        width = 3 * (len(missing) + 30)
+        tail = (query[hsp.qend:hsp.qend + width] if plus
+                else revcomp(query[max(0, hsp.qend - 1 - width):hsp.qend - 1]))
+        peptide = translate(tail, False)
+        stop = peptide.find("*")
+        if 0 < stop < len(missing) and peptide[:stop] != missing[:stop]:
+            return "C"
+    return ""
 
 
 def loss_of_function_call(gene: str, organism: str | None,
@@ -273,6 +346,15 @@ class ProteinScreener:
                 best[key] = (coverage, hsp, piece, meta)
             by_contig.setdefault((piece.sample, gene, piece.contig), []).append(hsp)
 
+        # The flank tests below read sequence, not alignments. The batch FASTA
+        # holds every contig of every sample in the run, so only the contigs
+        # carrying a locus with an unaligned end are loaded, and a run where no
+        # locus has one never opens the file at all.
+        references = read_fasta_dict(query)
+        wanted_contigs = {hsp.qseqid for _cov, hsp, _piece, _meta in best.values()
+                          if max(hsp.sstart - 1, hsp.slen - hsp.send) >= EDGE_MIN_MISSING}
+        contigs = read_fasta_subset(batch.path, wanted_contigs) if wanted_contigs else {}
+
         out: dict[str, list[Hit]] = {}
         for (sample, gene), (coverage, hsp, piece, meta) in best.items():
             rule = LOSS_OF_FUNCTION[gene]
@@ -281,6 +363,8 @@ class ProteinScreener:
                 for (s, g, _contig), group in by_contig.items()
                 if s == sample and g == gene)
             stop_at = premature_stop(hsp, hsp.slen)
+            edge = edge_frameshift(references.get(hsp.sseqid, ""),
+                                   contigs.get(hsp.qseqid, ""), hsp)
             # Organism-scoped, like the mutation catalogues. mgrB disruption means
             # colistin resistance in Klebsiella; in an organism where that has not
             # been established -- or where the species call names none -- it means
@@ -292,7 +376,7 @@ class ProteinScreener:
             # aligning in two frames is not this gene breaking.
             credible = (organism in rule["organisms"]
                         and hsp.pident >= rule["min_identity"])
-            broken = truncated or ((broken_frame or stop_at) and credible)
+            broken = truncated or ((broken_frame or stop_at or edge) and credible)
             if not broken:
                 continue
             if truncated:
@@ -301,9 +385,17 @@ class ProteinScreener:
             elif stop_at:
                 reason, detail = "nonsense", (
                     f"stop codon at reference residue {stop_at} of {hsp.slen}")
-            else:
+            elif broken_frame:
                 reason, detail = "frameshifted", (
                     "alignments at this locus change reading frame")
+            elif edge == "N":
+                reason, detail = "frameshifted", (
+                    f"the reference's first {hsp.sstart - 1} residues lie upstream "
+                    f"in a different reading frame")
+            else:
+                reason, detail = "frameshifted", (
+                    f"translation past reference residue {hsp.send} of {hsp.slen} "
+                    f"reads novel sequence and stops early")
             out.setdefault(sample, []).append(Hit(
                 sample=sample, database="protein", gene=gene,
                 accession=meta.get("accession", ""), product=meta.get("product", ""),

@@ -1607,3 +1607,124 @@ def test_attribution_is_single_sourced():
             continue
         text = path.read_text(encoding="utf-8")
         assert "Lorenzin" in text, f"{name} does not name the author"
+
+
+#: One codon per residue, enough to build a query by hand.
+_BACK = {"M": "ATG", "K": "AAA", "R": "CGT", "N": "AAT", "I": "ATT", "L": "CTG",
+         "A": "GCA", "V": "GTT", "G": "GGT", "E": "GAA", "Y": "TAT", "P": "CCG",
+         "S": "AGC", "T": "ACC", "H": "CAT", "W": "TGG", "D": "GAT", "F": "TTT",
+         "*": "TAA"}
+
+
+def _dna(peptide):
+    return "".join(_BACK[aa] for aa in peptide)
+
+
+def test_frameshift_at_the_start_is_found_without_a_second_alignment():
+    """ompK35 broken at codon 12 aligns from residue 15 at 100% identity.
+
+    blastx never reports the 14-residue N-terminal fragment, so there is no
+    second alignment to compare frames with and the gene reads as intact. The
+    lesion is that those residues are still in the DNA, one base out of step.
+    """
+    from hydra_amr.engines.protein import edge_frameshift
+    head, body = "MMKRNILAVVIP", "ALLVAGAANAAEIYNK"
+    reference = head + body
+    # One extra base between the two halves: the head is now out of frame.
+    query = "GGGGGG" + _dna(head) + "G" + _dna(body)
+    start = len("GGGGGG") + len(_dna(head)) + 1 + 1        # 1-based, body only
+    hsp = _hsp(qstart=start, qend=start + 3 * len(body) - 1,
+               sstart=len(head) + 1, send=len(reference), slen=len(reference))
+    assert edge_frameshift(reference, query, hsp) == "N"
+
+    # Without the inserted base the head is in frame: an intact gene whose
+    # N-terminus simply went unaligned, which must not be reported.
+    intact = "GGGGGG" + _dna(head) + _dna(body)
+    start = len("GGGGGG") + len(_dna(head)) + 1
+    hsp = _hsp(qstart=start, qend=start + 3 * len(body) - 1,
+               sstart=len(head) + 1, send=len(reference), slen=len(reference))
+    assert edge_frameshift(reference, intact, hsp) == ""
+
+
+def test_frameshift_at_the_end_needs_novel_sequence_before_the_stop():
+    """ramR frameshifted at residue 179 of 193 stops 8 residues short.
+
+    The missing residues are not out of frame here -- they are gone. What marks
+    the lesion is that translating on reads sequence that is not the
+    reference's and then stops. A gene whose last residues are merely absent is
+    a short allele, not a disruption.
+    """
+    from hydra_amr.engines.protein import edge_frameshift
+    body, tail = "MKRNILAVVIPALLVAGAA", "LGFEAMWHALHEADA"
+    reference = body + tail
+    broken = _dna(body) + _dna("RHVARPA") + _dna("*") + "GGGGGG"
+    hsp = _hsp(qstart=1, qend=3 * len(body), sstart=1, send=len(body),
+               slen=len(reference))
+    assert edge_frameshift(reference, broken, hsp) == "C"
+
+    # Same truncation point, but the stop follows immediately with nothing
+    # novel in between: a shorter allele, and not reported.
+    short = _dna(body) + _dna("*") + "GGGGGG"
+    assert edge_frameshift(reference, short, hsp) == ""
+
+
+def test_edge_frameshift_reads_the_minus_strand_in_gene_orientation():
+    """The flanks of a gene on the reverse strand lie the other way round."""
+    from hydra_amr.engines.protein import edge_frameshift
+    from hydra_amr.utils import revcomp
+    head, body = "MMKRNILAVVIP", "ALLVAGAANAAEIYNK"
+    reference = head + body
+    forward = "GGGGGG" + _dna(head) + "G" + _dna(body)
+    query = revcomp(forward)
+    # The body now runs from high coordinates down to low ones.
+    length = len(forward)
+    lo = length - (len("GGGGGG") + len(_dna(head)) + 1 + 3 * len(body)) + 1
+    hi = lo + 3 * len(body) - 1
+    hsp = _hsp(qstart=hi, qend=lo, sstart=len(head) + 1, send=len(reference),
+               slen=len(reference))
+    assert edge_frameshift(reference, query, hsp) == "N"
+
+    # And the other end of a reverse-strand gene, which lies at lower
+    # coordinates than the alignment rather than higher ones.
+    body, tail = "MKRNILAVVIPALLVAGAA", "LGFEAMWHALHEADA"
+    reference = body + tail
+    forward = _dna(body) + _dna("RHVARPA") + _dna("*") + "GGGGGG"
+    query = revcomp(forward)
+    hi = len(forward)
+    hsp = _hsp(qstart=hi, qend=hi - 3 * len(body) + 1, sstart=1, send=len(body),
+               slen=len(reference))
+    assert edge_frameshift(reference, query, hsp) == "C"
+
+
+def test_edge_frameshift_will_not_read_a_gene_that_is_in_pieces():
+    """The test is for a fragment blastx could not score, not for a broken gene.
+
+    A locus aligning over 46 of 359 residues was called frameshifted because a
+    six-residue probe turned up somewhere in 900 bases of flank. Anything that
+    long would have been reported as its own alignment, and frameshifted()
+    would have had two frames to compare; past the bound the unaligned part
+    belongs to the truncation rule.
+    """
+    from hydra_amr.engines.protein import edge_frameshift
+    head = "MMKRNILAVVIP" + "GESTPAYKLMNV" * 8      # 108 residues, far too long
+    body = "ALLVAGAANAAEIYNK"
+    reference = head + body
+    query = "GGGGGG" + _dna(head) + "G" + _dna(body)
+    start = len("GGGGGG") + len(_dna(head)) + 1 + 1
+    hsp = _hsp(qstart=start, qend=start + 3 * len(body) - 1,
+               sstart=len(head) + 1, send=len(reference), slen=len(reference))
+    assert edge_frameshift(reference, query, hsp) == ""
+    # The same lesion within the bound is still reported.
+    assert edge_frameshift(reference, query, hsp, max_missing=120) == "N"
+
+
+def test_read_fasta_subset_skips_what_it_was_not_asked_for(tmp_path):
+    """The query batch holds every contig in the run; the caller wants three."""
+    from hydra_amr.seqio import read_fasta_subset
+    path = tmp_path / "batch.fna"
+    path.write_text(">s1 first contig\nACGT\nACGT\n>s2 second\nTTTT\n>s3\nGGGG\n")
+    assert read_fasta_subset(path, {"s1", "s3"}) == {"s1": "ACGTACGT", "s3": "GGGG"}
+    # The last record is kept when it is wanted, and nothing is returned when
+    # nothing is asked for.
+    assert read_fasta_subset(path, {"s3"}) == {"s3": "GGGG"}
+    assert read_fasta_subset(path, set()) == {}

@@ -74,6 +74,34 @@ def read_fasta(path: str | Path) -> Iterator[tuple[str, str]]:
         yield header, "".join(chunks)
 
 
+def read_fasta_subset(path: str | Path, wanted: set[str]) -> dict[str, str]:
+    """Load only the named records, keyed by first whitespace token.
+
+    Skipping is the point: a whole-run query batch is one file holding every
+    contig of every sample, and the callers here want a handful of them.
+    Building the sequence of each record only to discard it is what makes
+    reading such a file expensive, so unwanted records are stepped over a line
+    at a time and never assembled.
+    """
+    out: dict[str, str] = {}
+    name = ""
+    keep = False
+    chunks: list[str] = []
+    with smart_open(path, "rt") as handle:
+        for line in handle:
+            if line.startswith(">"):
+                if keep:
+                    out[name] = "".join(chunks)
+                name = line[1:].split()[0] if len(line) > 1 else ""
+                keep = name in wanted
+                chunks = []
+            elif keep:
+                chunks.append(line.strip())
+    if keep:
+        out[name] = "".join(chunks)
+    return out
+
+
 def read_fasta_dict(path: str | Path, key: str = "id") -> dict[str, str]:
     """Load a FASTA into a dict keyed by first whitespace token (``id``) or full header."""
     out: dict[str, str] = {}
