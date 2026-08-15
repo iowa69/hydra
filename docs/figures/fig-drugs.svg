@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="428" viewBox="0 0 820 428" role="img" aria-label="Every drug, against the best of the other four">
+
+  <style>
+    .bg    { fill: #ffffff; }
+    .ttl   { fill: #0f172a; font: 600 16px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .sub   { fill: #64748b; font: 400 12px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .lbl   { fill: #334155; font: 400 12.5px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .val   { fill: #0f172a; font: 600 12.5px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .mut   { fill: #64748b; font: 400 11.5px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .cap   { fill: #94a3b8; font: 400 11px system-ui, -apple-system, Segoe UI, sans-serif; }
+    .badge { font: 700 10px system-ui, -apple-system, Segoe UI, sans-serif; fill: #ffffff; }
+    .rule  { stroke: #e2e8f0; stroke-width: 1; }
+    .axis  { stroke: #cbd5e1; stroke-width: 1; }
+    @media (prefers-color-scheme: dark) {
+      .bg   { fill: #0d1117; } .ttl { fill: #e6edf3; } .sub { fill: #8b949e; }
+      .lbl  { fill: #c9d1d9; } .val { fill: #e6edf3; } .mut { fill: #8b949e; }
+      .cap  { fill: #6e7681; } .rule { stroke: #21262d; } .axis { stroke: #30363d; }
+    }
+  </style>
+
+<rect class="bg" width="820" height="428" rx="8"/>
+<text class="ttl" x="24" y="32">Every drug, against the best of the other four</text>
+<text class="sub" x="24" y="52">871 isolates with a measured EUCAST result; 0.500 is what a constant answer scores</text>
+<line x1="298.66666666666663" y1="88" x2="298.66666666666663" y2="368" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 3"/>
+<text class="cap" x="298.66666666666663" y="82" text-anchor="middle">0.500 no skill</text>
+<text class="cap" x="632" y="82" text-anchor="middle">1.000</text>
+<text class="lbl" x="24" y="118">AMK</text>
+<rect x="232" y="106" width="154.0" height="8" rx="2" fill="#94a3b8" opacity="0.75"/>
+<rect x="232" y="114" width="138.0" height="8" rx="2" fill="#f59e0b" opacity="0.95"/>
+<text class="val" x="394.0" y="119">0.607 <tspan class="mut">vs 0.631 abricate(resfinder)</tspan></text>
+<text class="lbl" x="24" y="152">CIP  (near-constant)</text>
+<rect x="232" y="140" width="288.0" height="8" rx="2" fill="#94a3b8" opacity="0.75"/>
+<rect x="232" y="148" width="288.0" height="8" rx="2" fill="#3b82f6" opacity="0.95"/>
+<text class="val" x="528.0" y="153">0.832 <tspan class="mut">vs 0.832 Kleborate</tspan></text>
+<text class="lbl" x="24" y="186">COL</text>
+<rect x="232" y="174" width="177.3" height="8" rx="2" fill="#94a3b8" opacity="0.75"/>
+<rect x="232" y="182" width="230.0" height="8" rx="2" fill="#10b981" opacity="0.95"/>
+<text class="val" x="470.0" y="187">0.745 <tspan class="mut">vs 0.666 Kleborate</tspan></text>
+<text class="lbl" x="24" y="220">FOS</text>
+<rect x="232" y="208" width="66.7" height="8" rx="2" fill="#94a3b8" opacity="0.75"/>
+<rect x="232" y="216" width="66.7" height="8" rx="2" fill="#3b82f6" opacity="0.95"/>
+<text class="val" x="306.7" y="221">0.500 <tspan class="mut">vs 0.500 AMRFinderPlus</tspan></text>
+<text class="lbl" x="24" y="254">GEN</text>
+<rect x="232" y="242" width="238.0" height="8" rx="2" fill="#94a3b8" opacity="0.75"/>
+<rect x="232" y="250" width="237.3" height="8" rx="2" fill="#3b82f6" opacity="0.95"/>
+<text class="val" x="478.0" y="255">0.756 <tspan class="mut">vs 0.757 abricate(ncbi)</tspan></text>
+<text class="lbl" x="24" y="288">MEM  (near-constant)</text>
+<rect x="232" y="276" width="66.7" height="8" rx="2" fill="#94a3b8" opacity="0.75"/>
+<rect x="232" y="284" width="66.7" height="8" rx="2" fill="#3b82f6" opacity="0.95"/>
+<text class="val" x="306.7" y="289">0.500 <tspan class="mut">vs 0.500 AMRFinderPlus</tspan></text>
+<text class="lbl" x="24" y="322">SXT</text>
+<rect x="232" y="310" width="184.7" height="8" rx="2" fill="#94a3b8" opacity="0.75"/>
+<rect x="232" y="318" width="181.3" height="8" rx="2" fill="#f59e0b" opacity="0.95"/>
+<text class="val" x="424.7" y="323">0.672 <tspan class="mut">vs 0.677 Kleborate</tspan></text>
+<text class="lbl" x="24" y="356">TGC</text>
+<rect x="232" y="344" width="70.7" height="8" rx="2" fill="#94a3b8" opacity="0.75"/>
+<rect x="232" y="352" width="54.7" height="8" rx="2" fill="#f59e0b" opacity="0.95"/>
+<text class="val" x="310.7" y="357">0.482 <tspan class="mut">vs 0.506 AMRFinderPlus</tspan></text>
+<rect x="24" y="389" width="11" height="11" rx="2" fill="#10b981"/>
+<text class="cap" x="42" y="398">Hydra ahead</text>
+<rect x="144" y="389" width="11" height="11" rx="2" fill="#3b82f6"/>
+<text class="cap" x="162" y="398">Hydra level</text>
+<rect x="264" y="389" width="11" height="11" rx="2" fill="#f59e0b"/>
+<text class="cap" x="282" y="398">Hydra behind</text>
+<text class="cap" x="24" y="418">balanced accuracy = mean of sensitivity and specificity; a drug whose measured phenotype is near-constant cannot separate any two tools</text>
+</svg>

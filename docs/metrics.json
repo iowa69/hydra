@@ -1,6 +1,6 @@
 {
   "cohort": {
-    "blurb": "Measured on **2933 published *Klebsiella* genomes** whose sequence type was recorded independently, plus 667 closed reference genomes used for the gene-level comparison. Every one completed."
+    "blurb": "Measured on **2933 published *Klebsiella* genomes** whose sequence type was recorded independently, plus 667 closed reference genomes used for the gene-level comparison, and 871 isolates carrying a measured EUCAST phenotype. Every one completed."
   },
   "readme_performance": [
     {
@@ -20,37 +20,42 @@
     },
     {
       "metric": "Point mutations vs AMRFinderPlus 4.2.7",
-      "hydra": "775 / 775 \u2014 100.0%",
+      "hydra": "5,044 / 5,045 \u2014 99.98%",
       "rival": "AMRFinderPlus reference"
     },
     {
       "metric": "Disrupted genes vs AMRFinderPlus",
-      "hydra": "242 / 247 \u2014 97.976%",
+      "hydra": "1,509 / 1,530 \u2014 98.627%",
       "rival": "AMRFinderPlus reference"
     },
     {
       "metric": "Colistin, very major errors",
-      "hydra": "50",
+      "hydra": "48",
       "rival": "Kleborate 64, AMRFinderPlus 73"
     },
     {
       "metric": "Colistin, balanced accuracy",
-      "hydra": "0.735",
+      "hydra": "0.745",
       "rival": "Kleborate 0.666"
     },
     {
-      "metric": "Ciprofloxacin, balanced accuracy",
+      "metric": "Ciprofloxacin, balanced accuracy (0.7% susceptible)",
       "hydra": "0.832",
       "rival": "Kleborate 0.832, AMRFinderPlus 0.500"
     },
     {
       "metric": "Phenotype, mean balanced accuracy over 8 drugs",
-      "hydra": "0.634",
+      "hydra": "0.637",
       "rival": "Kleborate 0.596, AMRFinderPlus 0.583"
     },
     {
       "metric": "Virulence score vs Kleborate",
       "hydra": "99.45%",
+      "rival": "reference"
+    },
+    {
+      "metric": "Resistance score vs Kleborate",
+      "hydra": "96.76%",
       "rival": "reference"
     },
     {
@@ -73,12 +78,16 @@
       "alt": "Predicting the measured phenotype"
     },
     {
+      "src": "docs/figures/fig-drugs.svg",
+      "alt": "Every drug, against the best of the other four"
+    },
+    {
       "src": "docs/figures/fig-speed.svg",
       "alt": "Runtime"
     }
   ],
-  "head_to_head_title": "Head to head on 2933 Klebsiella genomes",
-  "head_to_head_subtitle": "same genomes, same databases, same thresholds, matched on locus",
+  "head_to_head_title": "Head to head on Klebsiella",
+  "head_to_head_subtitle": "typing and scores: 2933 genomes  \u00b7  gene recall: 667 closed references  \u00b7  drugs: 871 phenotyped isolates",
   "head_to_head": [
     {
       "label": "Whole job, per genome",
@@ -100,19 +109,19 @@
     },
     {
       "label": "Point mutations vs AMRFinderPlus",
-      "hydra": "100.0%",
+      "hydra": "99.98%",
       "rival": "AMRFinderPlus reference",
       "verdict": "level"
     },
     {
       "label": "Colistin, very major errors",
-      "hydra": "50",
+      "hydra": "48",
       "rival": "Kleborate 64",
       "verdict": "ahead"
     },
     {
       "label": "Colistin, balanced accuracy",
-      "hydra": "0.735",
+      "hydra": "0.745",
       "rival": "Kleborate 0.666",
       "verdict": "ahead"
     },
@@ -132,6 +141,24 @@
       "label": "Sequence type vs Kleborate",
       "hydra": "2933 / 2933",
       "rival": "2933 / 2933",
+      "verdict": "level"
+    },
+    {
+      "label": "Tigecycline, balanced accuracy",
+      "hydra": "0.482",
+      "rival": "AMRFinderPlus 0.506",
+      "verdict": "behind"
+    },
+    {
+      "label": "Aminoglycoside, balanced accuracy",
+      "hydra": "0.607",
+      "rival": "abricate(resfinder) 0.631",
+      "verdict": "behind"
+    },
+    {
+      "label": "Resistance score vs Kleborate",
+      "hydra": "96.76%",
+      "rival": "reference",
       "verdict": "level"
     },
     {
@@ -225,35 +252,97 @@
       }
     ]
   },
+  "per_drug_title": "Every drug, against the best of the other four",
+  "per_drug_subtitle": "871 isolates with a measured EUCAST result; 0.500 is what a constant answer scores",
+  "per_drug_footnote": "balanced accuracy = mean of sensitivity and specificity; a drug whose measured phenotype is near-constant cannot separate any two tools",
+  "per_drug": [
+    {
+      "drug": "AMK",
+      "hydra": 0.607,
+      "rival": 0.631,
+      "rival_name": "abricate(resfinder)",
+      "minority_pct": 44.1,
+      "verdict": "behind"
+    },
+    {
+      "drug": "CIP",
+      "hydra": 0.832,
+      "rival": 0.832,
+      "rival_name": "Kleborate",
+      "minority_pct": 0.7,
+      "verdict": "level"
+    },
+    {
+      "drug": "COL",
+      "hydra": 0.745,
+      "rival": 0.666,
+      "rival_name": "Kleborate",
+      "minority_pct": 13.1,
+      "verdict": "ahead"
+    },
+    {
+      "drug": "FOS",
+      "hydra": 0.5,
+      "rival": 0.5,
+      "rival_name": "AMRFinderPlus",
+      "minority_pct": 46.9,
+      "verdict": "level"
+    },
+    {
+      "drug": "GEN",
+      "hydra": 0.756,
+      "rival": 0.757,
+      "rival_name": "abricate(ncbi)",
+      "minority_pct": 39.0,
+      "verdict": "level"
+    },
+    {
+      "drug": "MEM",
+      "hydra": 0.5,
+      "rival": 0.5,
+      "rival_name": "AMRFinderPlus",
+      "minority_pct": 2.3,
+      "verdict": "level"
+    },
+    {
+      "drug": "SXT",
+      "hydra": 0.672,
+      "rival": 0.677,
+      "rival_name": "Kleborate",
+      "minority_pct": 25.5,
+      "verdict": "behind"
+    },
+    {
+      "drug": "TGC",
+      "hydra": 0.482,
+      "rival": 0.506,
+      "rival_name": "AMRFinderPlus",
+      "minority_pct": 23.5,
+      "verdict": "behind"
+    }
+  ],
   "errors": {
     "title": "Predicting the measured phenotype",
-    "subtitle": "1279 clinical isolates with a EUCAST result, each tool scored on its own drug annotation",
+    "subtitle": "871 clinical isolates with a EUCAST result, each tool scored on its own drug annotation",
     "footnote": "very major error = predicted susceptible, measured resistant (CLSI/ISO 20776-2)",
     "rows": [
       {
         "label": "Colistin, very major errors",
-        "hydra": 50,
+        "hydra": 48,
         "rival": 64,
         "rival_name": "Kleborate",
         "lower_is_better": true
       },
       {
         "label": "Colistin, balanced accuracy",
-        "hydra": 0.735,
+        "hydra": 0.745,
         "rival": 0.666,
         "rival_name": "Kleborate",
         "lower_is_better": false
       },
       {
-        "label": "Ciprofloxacin, balanced accuracy",
-        "hydra": 0.832,
-        "rival": 0.5,
-        "rival_name": "AMRFinderPlus",
-        "lower_is_better": false
-      },
-      {
         "label": "Mean over 8 drugs",
-        "hydra": 0.634,
+        "hydra": 0.637,
         "rival": 0.596,
         "rival_name": "Kleborate",
         "lower_is_better": false

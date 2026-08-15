@@ -29,20 +29,21 @@
 
 ## Performance
 
-Measured on **2933 published *Klebsiella* genomes** whose sequence type was recorded independently, plus 667 closed reference genomes used for the gene-level comparison. Every one completed.
+Measured on **2933 published *Klebsiella* genomes** whose sequence type was recorded independently, plus 667 closed reference genomes used for the gene-level comparison, and 871 isolates carrying a measured EUCAST phenotype. Every one completed.
 
 | | Hydra | Reference tool |
 |---|---|---|
 | Sequence type vs the recorded answer | **2933 / 2933 — 100.0%** | — |
 | Sequence type vs Kleborate 3.2.4 | **2933 / 2933 — 100.0%** | 2933 / 2933 |
 | Gene recall vs abricate 1.4.0, nine databases | **127,748 / 127,748 — 100.00%** | abricate 100% |
-| Point mutations vs AMRFinderPlus 4.2.7 | **775 / 775 — 100.0%** | AMRFinderPlus reference |
-| Disrupted genes vs AMRFinderPlus | **242 / 247 — 97.976%** | AMRFinderPlus reference |
-| Colistin, very major errors | **50** | Kleborate 64, AMRFinderPlus 73 |
-| Colistin, balanced accuracy | **0.735** | Kleborate 0.666 |
-| Ciprofloxacin, balanced accuracy | **0.832** | Kleborate 0.832, AMRFinderPlus 0.500 |
-| Phenotype, mean balanced accuracy over 8 drugs | **0.634** | Kleborate 0.596, AMRFinderPlus 0.583 |
+| Point mutations vs AMRFinderPlus 4.2.7 | **5,044 / 5,045 — 99.98%** | AMRFinderPlus reference |
+| Disrupted genes vs AMRFinderPlus | **1,509 / 1,530 — 98.627%** | AMRFinderPlus reference |
+| Colistin, very major errors | **48** | Kleborate 64, AMRFinderPlus 73 |
+| Colistin, balanced accuracy | **0.745** | Kleborate 0.666 |
+| Ciprofloxacin, balanced accuracy (0.7% susceptible) | **0.832** | Kleborate 0.832, AMRFinderPlus 0.500 |
+| Phenotype, mean balanced accuracy over 8 drugs | **0.637** | Kleborate 0.596, AMRFinderPlus 0.583 |
 | Virulence score vs Kleborate | **99.45%** | reference |
+| Resistance score vs Kleborate | **96.76%** | reference |
 | Whole job, per genome | **10.8 s** | 23.3 s for four tools |
 
 <p align="center"><img src="docs/figures/fig-headtohead.svg" alt="Head to head" width="820"></p>
@@ -50,6 +51,8 @@ Measured on **2933 published *Klebsiella* genomes** whose sequence type was reco
 <p align="center"><img src="docs/figures/fig-recall.svg" alt="Gene recall" width="820"></p>
 
 <p align="center"><img src="docs/figures/fig-errors.svg" alt="Predicting the measured phenotype" width="820"></p>
+
+<p align="center"><img src="docs/figures/fig-drugs.svg" alt="Every drug, against the best of the other four" width="820"></p>
 
 <p align="center"><img src="docs/figures/fig-speed.svg" alt="Runtime" width="820"></p>
 

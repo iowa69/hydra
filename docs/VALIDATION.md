@@ -84,9 +84,9 @@ files. **667/667 completed, no failures.**
 | Sequence type vs `mlst` 2.35.0 | **666/667 (99.85%)** identical |
 | Sequence type vs Kleborate 3.2.4 | **666/667 (99.85%)** identical |
 | Virulence score vs Kleborate | **650/667 (97.45%)** identical |
-| Resistance score vs Kleborate | 548/667 (82.16%) identical |
-| Acquired AMR genes vs AMRFinderPlus 4.2.7 (same catalogue), gene-family level | **0.805** mean Jaccard |
-| Resistance point mutations vs AMRFinderPlus | **775 of 775** substitutions (100.0%), **242 of 247** disrupted genes (97.976%) |
+| Resistance score vs Kleborate | **664/667 (99.55%)** identical |
+| Acquired AMR genes vs AMRFinderPlus 4.2.7 (same catalogue) | **0.979** mean Jaccard at gene-family level, 0.640 at label level |
+| Resistance point mutations vs AMRFinderPlus | **592 of 592** substitutions (100.0%), identical on **667/667** genomes; **138 of 141** disrupted genes (97.87%) |
 | Species | all four members of the complex separated, **667/667** at "strong" confidence |
 | Sequence type assigned | 666/667, **363 distinct STs** |
 | Genomes completed | **667/667**, no failures |
@@ -99,16 +99,24 @@ finds *rpoB* twice — `rpoB(4,4)` — and declines to call an ST at all. Both c
 allele 4, so the profile is unambiguous; Hydra calls ST20 from 7/7 exact loci, and
 Kleborate independently calls ST20 as well.
 
-The resistance score agrees less often than the virulence score because it is the one
-place a database difference shows through: Kleborate scores from its own curated set,
-Hydra from drug classes it carries across thirteen databases, and CARD ships no drug
-class for most of its efflux entries (see below).
+The resistance score used to be the weakest number on this arm at 82.16%, and it was
+the one place a database difference showed through: Kleborate scores from its own
+curated set, Hydra from drug classes it carries across thirteen databases, and CARD
+ships no drug class for most of its efflux entries (see below). Marking the
+determinants every *K. pneumoniae* carries as intrinsic, recognising extended-spectrum
+beta-lactamases from the NCBI product description rather than a hand-written list, and
+finding the disrupted regulators closed most of that gap: **99.55%** here and 96.76%
+on the 2933-genome arm. It now agrees more often than the virulence score, which is
+the reverse of how this arm read before.
 
 Where the acquired-gene calls differ, it is usually the name rather than the gene.
 Hydra reports the specific allele where AMRFinderPlus reports the generic one —
 `fosA5_fam` and `fosA9` (598 calls) against `fosA` (616), `oqxB20`/`oqxB25` against
-`oqxB`, `aac(6')-Ib'` against `aac(6')-Ib`. Gene-family agreement of 0.805 therefore
-understates it, because a suffix like `_fam` does not reduce to the bare gene.
+`oqxB`, `aac(6')-Ib'` against `aac(6')-Ib`. Reduced to gene families the two agree at
+**0.979** against 0.640 on the raw labels, so almost the whole of that gap is the
+choice of name rather than a difference about what is in the genome. The reduction
+drops a trailing `_fam` before the allele number, since AMRFinderPlus appends it after
+one; the figure quoted here previously was 0.805, which no script produced.
 
 **Two things this comparison had to avoid**, both of which produce a flattering number
 that means nothing. Hydra keeps every overlapping HSP and flags the best per locus, so
@@ -235,12 +243,29 @@ resistance in *Klebsiella* travels on a plasmid.
 | Sequence type vs Kleborate 3.2.4 | **2933/2933 (100.00%)** |
 | Sequence type vs `mlst` 2.35.0 | 2931/2933 (99.93%); of those it typed, **2931/2931 (100%)** |
 | Virulence score vs Kleborate | **2917/2933 (99.45%)** |
-| Resistance score vs Kleborate | 2453/2933 (83.63%) |
-| Acquired AMR genes vs AMRFinderPlus | 0.719 mean Jaccard |
-| Point mutations vs AMRFinderPlus | 775 substitutions shared, **0** missed; 242 disrupted genes shared, **5** missed |
+| Resistance score vs Kleborate | **2838/2933 (96.76%)** |
+| Acquired AMR genes vs AMRFinderPlus | **0.957** mean Jaccard at gene-family level, 0.719 at label level |
+| Point mutations vs AMRFinderPlus | 5044 substitutions shared, **1** missed (99.98%); 1509 disrupted genes shared, **21** missed (98.63%) |
 | Sequence type assigned | **2933/2933**, 539 distinct STs |
 | Species | 2915 *K. pneumoniae*, 15 *variicola*, 3 *quasipneumoniae* |
 | Genomes completed | **2933/2933**, no failures, 10.8 s a genome |
+
+**Substitutions and disrupted genes are counted separately, and getting that wrong
+cost 1414 phantom misses.** AMRFinderPlus writes both as `POINT` rows, and the two are
+not named alike: a substitution is `gyrA_S83L`, which Hydra spells the same way, while
+a disruption is `ompK35_N29TfsTer34`, where Hydra reports the locus and the mechanism
+instead. Scoring the disruption rows against Hydra's substitution set counted every
+one of them as a miss and never let Hydra's own disruption calls answer, which is what
+turned 1 missed substitution into 1414. Disruptions are compared by gene, in their own
+tally, because that is the claim both tools are actually making.
+
+A 400-genome subset of this arm is also compared by a dedicated script
+(`compare_point_mutations.py`) that folds the spellings the two catalogues disagree
+on — `STOP` against `Ter` — and registers every sample screened, including the ones
+where Hydra found nothing, so a miss cannot drop out of the denominator. It agrees:
+**775 of 775 substitutions and 246 of 247 disrupted genes**, a combined 99.90%. The
+one disruption it misses, on `CP034200`, is an in-frame insertion carrying a stop
+codon, which is neither a frameshift nor a truncation and is not detected.
 
 The two genomes `mlst` and Hydra disagree on are the same case as on the closed
 references, and here the answer key settles it. On `CP110566` the comparator finds
@@ -267,17 +292,23 @@ the same measurements. Each is asked the same question using **its own drug anno
 — a hand-written gene list would encode our judgement and flatter whichever tool
 shared it. Intermediates are excluded.
 
-Three drugs are excluded, and the reason is that they cannot separate any two tools.
-755 of 773 isolates are meropenem-resistant and 832 of 838 ciprofloxacin-resistant, so
-"call everything resistant" earns a perfect sensitivity and a zero specificity and
-every tool scores 0.5. Fosfomycin fails the same way from the other end: *fosA* is
-intrinsic to *K. pneumoniae*, every tool reports it in every isolate, so every tool
-predicts resistance for 100% of them. One is a constant phenotype and the other a
-constant prediction; neither is decided by looking at the answer.
+All eight drugs are scored, but three of them carry almost no information and the
+mean should be read knowing which. 755 of 773 isolates are meropenem-resistant and
+832 of 838 ciprofloxacin-resistant, so the phenotype is nearly constant: "call
+everything resistant" earns a perfect sensitivity and a zero specificity. Fosfomycin
+fails from the other end — *fosA* is intrinsic to *K. pneumoniae*, every tool reports
+it in every isolate, so every tool predicts resistance for all of them and every tool
+scores exactly 0.500. One is a constant phenotype, the other a constant prediction.
+
+Ciprofloxacin is the one to be careful with, because it is a headline number resting
+on a very thin base: **six susceptible isolates in 838**. Hydra and Kleborate both
+score 0.832 there by calling four of those six correctly, and the other three tools
+score 0.500. The gap between 0.832 and 0.500 is real, but two isolates moving would
+change it, and it should not be read as a general result.
 
 | Tool | Mean balanced accuracy | Very major errors | Major errors |
 |---|---|---|---|
-| **Hydra** | **0.634** | 719 | 757 |
+| **Hydra** | **0.637** | 705 | 758 |
 | Kleborate | 0.596 | 865 | 925 |
 | AMRFinderPlus | 0.583 | 284 | 886 |
 | abricate(ncbi) | 0.566 | 530 | 806 |
@@ -290,21 +321,21 @@ AMRProt catalogue and should agree exactly where Hydra adds nothing beyond it.
 
 | Drug | Hydra | Kleborate | AMRFinderPlus | abricate (ncbi) |
 |---|---|---|---|---|
-| Ciprofloxacin | **0.832** | **0.832** | 0.500 | 0.499 |
-| Colistin | **0.735** | 0.666 | 0.624 | 0.500 |
+| Ciprofloxacin *(6 susceptible isolates)* | **0.832** | **0.832** | 0.500 | 0.499 |
+| Colistin | **0.745** | 0.666 | 0.624 | 0.500 |
 | Gentamicin | 0.756 | 0.536 | 0.756 | 0.757 |
 | Co-trimoxazole | 0.672 | 0.677 | 0.672 | 0.675 |
 | Amikacin | 0.607 | 0.556 | 0.607 | 0.631 |
-| Tigecycline | 0.473 | 0.500 | 0.506 | 0.487 |
+| Tigecycline | 0.482 | 0.500 | 0.506 | 0.487 |
 
 **The very-major-error column needs reading with the drugs in front of it.** Hydra's
-719 against AMRFinderPlus's 284 is not a general result: 457 of Hydra's are
+705 against AMRFinderPlus's 284 is not a general result: 445 of Hydra's are
 tigecycline alone, where AMRFinderPlus records 1. That one drug is worth setting out
 in full, because the summary number inverts what is actually happening.
 
 | Tool | Sensitivity | Specificity | True positives | True negatives | Balanced accuracy |
 |---|---|---|---|---|---|
-| Hydra | 0.054 | **0.892** | 26 | 132 | 0.473 |
+| Hydra | 0.079 | **0.885** | 38 | 131 | 0.482 |
 | AMRFinderPlus | **0.998** | 0.013 | 482 | 2 | 0.506 |
 | abricate (ncbi) | 0.549 | 0.426 | 265 | 63 | 0.487 |
 | Kleborate | 0.000 | 1.000 | 0 | 148 | 0.500 |
@@ -315,21 +346,39 @@ resfinder database score 0.500 by calling nothing resistant at all; AMRFinderPlu
 scores 0.506 by calling very nearly everything resistant, finding 2 of the 148
 susceptible isolates. Those are the two degenerate constant answers, and a constant
 prediction cannot inform a treatment decision whichever side it falls on. Hydra is
-the only tool of the five making a discriminating call here, and its 26 true
-positives come at 0.892 specificity.
+the only tool of the five making a discriminating call here, and its 38 true
+positives come at 0.885 specificity.
 
 No tool predicts tigecycline resistance from a genome, because it is driven by efflux
 regulation rather than by an acquired gene. Hydra could be moved above 0.500 by
 loosening what counts as a determinant until sensitivity rose, but that would be
 fitting to this answer key rather than measuring anything, so it has not been done.
 
-Excluding intrinsic *oqxAB* is what moved Hydra from 0.503 to 0.473 here, and the
+Excluding intrinsic *oqxAB* is what moved Hydra from 0.503 to 0.482 here, and the
 same exclusion is what moved ciprofloxacin from 0.500 to 0.832. That trade was made
 deliberately and is not free.
 
 Drug by drug, where a genome can predict the phenotype at all, Hydra has the fewest
-very major errors on colistin (50, against Kleborate's 64 and AMRFinderPlus's 73) and
+very major errors on colistin (48, against Kleborate's 64 and AMRFinderPlus's 73) and
 is level with every tool on gentamicin, co-trimoxazole and amikacin.
+
+**Scored against the best of the other four on each drug rather than against one
+nominated rival, Hydra is ahead on one drug, level on four and behind on three.**
+
+| Drug | Hydra | Best of the other four | |
+|---|---|---|---|
+| Colistin | **0.745** | Kleborate 0.666 | ahead |
+| Ciprofloxacin | 0.832 | Kleborate 0.832 | level |
+| Gentamicin | 0.756 | abricate(ncbi) 0.757 | level |
+| Fosfomycin | 0.500 | all four 0.500 | level |
+| Meropenem | 0.500 | all four 0.500 | level |
+| Co-trimoxazole | 0.672 | Kleborate 0.677 | behind |
+| Amikacin | 0.607 | abricate(resfinder) 0.631 | behind |
+| Tigecycline | 0.482 | AMRFinderPlus 0.506 | behind |
+
+Hydra's mean of 0.637 beats every individual tool's mean, and that is the fair
+tool-against-tool comparison. It does not mean Hydra is the best choice on every
+drug, and the table above is the honest form of the same measurement.
 
 **An earlier version of this table put Hydra third at 0.580, with 1236 major errors.
 That was a measurement error, not a result.** Hydra keeps every overlapping allele at
