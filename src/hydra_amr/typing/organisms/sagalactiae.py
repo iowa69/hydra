@@ -62,7 +62,6 @@ from .strep_common import (
     GeneHit,
     GeneSpec,
     PanelSource,
-    contig_lengths,
     download,
     fetch_panel,
     make_blast_db,
