@@ -198,7 +198,7 @@ class OrganismModule:
         if mlst is not None and _accepts_mlst(self.module.run):
             kwargs["mlst"] = mlst
         results = self.module.run(Path(assembly), Path(db_dir), **kwargs)
-        return relabel(list(results))
+        return relabel(list(results), organism=self.title)
 
 
 def _accepts_mlst(func) -> bool:
@@ -324,10 +324,12 @@ def select(species: SpeciesCall | None = None, mlst: MlstCall | None = None,
 
 
 # ------------------------------------------------------------------- relabel
-def relabel(results: Iterable[TypingResult]) -> list[TypingResult]:
+def relabel(results: Iterable[TypingResult], organism: str = "") -> list[TypingResult]:
     """Give every result a readable heading, and correct the misleading ones.
 
     Presentation only: no call, allele or note is replaced, only added to.
+    *organism* names the module the calls came from, so a report can group a
+    genome's calls by it.
     """
     out: list[TypingResult] = []
     for result in results:
@@ -339,13 +341,16 @@ def relabel(results: Iterable[TypingResult]) -> list[TypingResult]:
             title = "M-protein gene type (group C/G, S. dysgalactiae)"
             extra = _NON_PYOGENES_EMM_NOTE.format(call=result.call)
             note = f"{note}; {extra}" if note else extra
-        if title == result.title and note == result.note:
+        organism_name = organism or result.organism
+        if (title == result.title and note == result.note
+                and organism_name == result.organism):
             out.append(result)
             continue
         out.append(TypingResult(
             scheme=result.scheme, call=result.call, lineage=result.lineage,
             alleles=dict(result.alleles), loci_found=result.loci_found,
-            loci_total=result.loci_total, note=note, title=title))
+            loci_total=result.loci_total, note=note, title=title,
+            organism=organism_name))
     return out
 
 

@@ -68,8 +68,8 @@ def mlst_table(results: Sequence[SampleResult]) -> pd.DataFrame:
 
 
 #: Columns of the long-form typing table.
-TYPING_COLUMNS = ("sample", "species", "scheme", "scheme_name", "call", "lineage",
-                  "loci", "evidence", "caveats")
+TYPING_COLUMNS = ("sample", "species", "organism", "scheme", "scheme_name",
+                  "call", "lineage", "loci", "evidence", "caveats")
 
 
 def typing_table(results: Sequence[SampleResult]) -> pd.DataFrame:
