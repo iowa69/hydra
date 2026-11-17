@@ -674,7 +674,7 @@ REFERENCES: tuple[Reference, ...] = (
               "revealed convergent evolution of frameshift mutations",
         journal="Microbiol Spectr 10:e0133421",
         doi="10.1128/spectrum.01334-21",
-        pmid="35315691",
+        pmid="35044202",
         supports="AgrVATE, the reference tool whose motif database was used to "
                  "re-type USA300, Newman and RF122 as an independent cross-check",
     ),

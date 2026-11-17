@@ -741,7 +741,7 @@ Holden 2010 is **19948800** (not 20139188).
 19. **Raghuram V, Alexander AM, Loo HQ, Petit RA 3rd, Goldberg JB, Read TD.**
     Species-wide phylogenomics of the *Staphylococcus aureus* Agr operon
     revealed convergent evolution of frameshift mutations. *Microbiol Spectr*
-    2022;10:e0133421. PMID 35315691 · doi:10.1128/spectrum.01334-21
+    2022;10:e0133421. PMID 35044202 · doi:10.1128/spectrum.01334-21
     — *AgrVATE, the reference tool whose 31-mer motif database was used to
     re-type USA300, Newman and RF122 independently as a cross-check.* AgrVATE
     is MIT-licensed but needs non-Python external programs, so it is not a
