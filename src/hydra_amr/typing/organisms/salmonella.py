@@ -1096,8 +1096,14 @@ def _require(path: Path, what: str) -> Path:
 
 
 def run(assembly: Path, db_dir: Path, *, threads: int = 1,
-        workdir: Path | None = None) -> list[TypingResult]:
-    """Type one *Salmonella* assembly. One TypingResult per scheme."""
+        workdir: Path | None = None, mlst=None) -> list[TypingResult]:
+    """Type one *Salmonella* assembly. One TypingResult per scheme.
+
+    ``mlst`` is Hydra's own :class:`~hydra_amr.records.MlstCall`. When it is
+    given and belongs to a *Salmonella* scheme, the sequence type is taken from
+    it instead of typing the seven loci a second time; the eBurst group is still
+    read from this module's profile table, which Hydra's call does not carry.
+    """
     assembly = Path(assembly)
     root = Path(db_dir) / KEY
     antigen_db = _require(root / "antigens" / "antigens.fna", "the antigen allele set")
@@ -1110,11 +1116,11 @@ def run(assembly: Path, db_dir: Path, *, threads: int = 1,
     if workdir is None:
         with tempdir(prefix="hydra.salmonella.run.") as scratch:
             return _run_in(assembly, root, antigen_db, marker_db, spi_db, mlst_db,
-                           rows, scratch, threads)
+                           rows, scratch, threads, mlst)
     workdir = Path(workdir)
     workdir.mkdir(parents=True, exist_ok=True)
     return _run_in(assembly, root, antigen_db, marker_db, spi_db, mlst_db, rows,
-                   workdir, threads)
+                   workdir, threads, mlst)
 
 
 def _plain_fasta(assembly: Path, work: Path) -> Path:
@@ -1136,7 +1142,8 @@ def _plain_fasta(assembly: Path, work: Path) -> Path:
 
 def _run_in(assembly: Path, root: Path, antigen_db: Path, marker_db: Path,
             spi_db: Path, mlst_db: Path, rows: list[SerovarRow], work: Path,
-            threads: int) -> list[TypingResult]:
+            threads: int,
+            mlst_call=None) -> list[TypingResult]:
     assembly = _plain_fasta(assembly, work)
     antigens = _blast_antigens(assembly, antigen_db, work, threads)
     markers = _blast_markers(assembly, marker_db, work, threads)
@@ -1144,9 +1151,12 @@ def _run_in(assembly: Path, root: Path, antigen_db: Path, marker_db: Path,
     results = [serovar, subspecies, _call_h2_locus(antigens, markers)]
     if spi_db.exists():
         results.append(_call_spi(assembly, spi_db, work, threads))
-    if mlst_db.exists():
-        results.append(_call_mlst(assembly, mlst_db, root / "mlst" / "profiles.tsv",
-                                  work, threads, serovar))
+    profiles = root / "mlst" / "profiles.tsv"
+    from_call = _mlst_from_call(mlst_call, profiles, serovar)
+    if from_call is not None:
+        results.append(from_call)
+    elif mlst_db.exists():
+        results.append(_call_mlst(assembly, mlst_db, profiles, work, threads, serovar))
     results.append(_call_virulence_plasmid(markers))
     results.append(_call_typhoidal(markers, antigens))
     return results
@@ -1942,6 +1952,61 @@ def _load_profiles(path: Path) -> tuple[list[str], dict[tuple[str, ...], str],
             if cc is not None and len(row) > cc and row[cc].strip():
                 ebg[st] = row[cc].strip()
     return loci, table, ebg
+
+
+def _mlst_from_call(mlst, profiles: Path, serovar: TypingResult) -> TypingResult | None:
+    """Build the MLST result from Hydra's own call, when it can be used.
+
+    Hydra types the seven Achtman loci in its MLST step. Typing them again here
+    answered the same question from the same PubMLST data, so when the call is
+    present and from a *Salmonella* scheme it is used, and only the eBurst group
+    - which Hydra's ``MlstCall`` does not carry - is looked up in this module's
+    profile table.
+
+    Returns ``None`` when the call cannot be used, and the caller then types the
+    loci itself.
+    """
+    if mlst is None:
+        return None
+    scheme = str(getattr(mlst, "scheme", "") or "").strip().lower()
+    if scheme not in {name.lower() for name in MLST_SCHEMES}:
+        return None
+    st = str(getattr(mlst, "sequence_type", "") or "").strip()
+    if not st or st == "-":
+        return None
+    alleles = {k: str(v) for k, v in dict(getattr(mlst, "alleles", {}) or {}).items()}
+    _loci, _table, ebg = _load_profiles(profiles)
+    group = ebg.get(st, "")
+    notes = [f"the sequence type is Hydra's own MLST call against the {scheme} "
+             f"scheme ({getattr(mlst, 'source', 'assembly')}); the seven loci "
+             f"were not typed twice"]
+    if str(getattr(mlst, "note", "") or ""):
+        notes.append(str(mlst.note))
+    if not group:
+        notes.append(f"ST{st} carries no eBurst group in the installed profile "
+                     f"table, so none is reported")
+    else:
+        notes.append(f"eBurst group {group}. An eBG is a group of STs that share "
+                     f"at least six of seven alleles with another member; it is "
+                     f"the unit Achtman et al. proposed in place of the serovar, "
+                     f"and it is usually a tighter lineage than the serovar name")
+    notes.append(f"the serovar predicted from the antigen genes is "
+                 f"'{serovar.call}'. Serovar and lineage are reported separately "
+                 f"on purpose: most serovars are polyphyletic and some eBGs hold "
+                 f"several serovars, so a disagreement between the two is a "
+                 f"finding to look up in EnteroBase or PubMLST, not an error to "
+                 f"average away")
+    if alleles:
+        alleles["profile"] = " ".join(f"{locus}({value})"
+                                      for locus, value in sorted(alleles.items()))
+    alleles["scheme"] = ("PubMLST Salmonella scheme 2, the 7-locus Achtman "
+                         "scheme (aroC dnaN hemD hisD purE sucA thrA)")
+    return TypingResult(
+        scheme="salmonella_mlst", call=f"ST{st}",
+        lineage=f"eBG{group}" if group else "-", alleles=alleles,
+        loci_found=int(getattr(mlst, "loci_found", 0) or 0),
+        loci_total=int(getattr(mlst, "loci_total", 0) or 0),
+        note="; ".join(notes))
 
 
 def _call_mlst(assembly: Path, db: Path, profiles: Path, work: Path,

@@ -76,22 +76,6 @@ INFRAME_INDEL = 10
 #: rather than the gene, is blamed for it. One read length is the natural scale.
 CONTIG_EDGE_BP = 300
 
-#: Translated searches are run single-threaded, deliberately.
-#:
-#: BLAST+ 2.16.0 ``blastx`` segfaults when ``-max_target_seqs`` is given together
-#: with ``-num_threads`` greater than one and the search returns no hits. Hydra's
-#: :func:`hydra_amr.engines.blast.blast` always passes ``-max_target_seqs``, so a
-#: translated search against a small protein database on a sample that carries
-#: none of the panel - a different species, or a genuinely negative isolate -
-#: crashes every time. The panel databases here are tens of kilobytes, so a
-#: single thread costs a second or two per assembly and buys determinism. The
-#: nucleotide searches (emm, cps) are unaffected and still use every thread.
-#:
-#: This is a local workaround, not a fix: the fix belongs in ``blast()``, which
-#: this module must not edit.
-BLASTX_THREADS = 1
-
-
 # --------------------------------------------------------------------- panels
 @dataclass(frozen=True)
 class PanelSource:
@@ -398,7 +382,7 @@ def screen_panel(assembly: Path, fasta: Path, workdir: Path,
     by_name = {spec.name: spec for spec in panel}
     out_tab = workdir / f"{tag}.blastx.tsv"
     hsps = blast(
-        "blastx", assembly, fasta, out_tab, threads=BLASTX_THREADS,
+        "blastx", assembly, fasta, out_tab, threads=threads,
         evalue=1e-10, max_target_seqs=10000, with_alignment=True,
     )
     merged = merge_hsps(hsps, query_scale=3.0)

@@ -46,7 +46,7 @@ from pathlib import Path
 from ...engines.blast import blast, check_db_exists
 from ...records import TypingResult
 from ...seqio import read_fasta
-from ...utils import LOG, HydraError, tempdir
+from ...utils import LOG, tempdir
 from .base import OrganismDb, Reference
 from .strep_common import (
     CONTIG_EDGE_BP,

@@ -241,15 +241,9 @@ def screen_proteins(assembly_db: Path, proteins: Path, workdir: Path, *,
     whole length.
     """
     out = workdir / f"{tag}.tblastn.tsv"
-    # Single-threaded on purpose. BLAST+ 2.16.0 segfaults deterministically on a
-    # translated search when -max_target_seqs is combined with -num_threads > 1
-    # and the search returns no hits, which is exactly what happens when a
-    # sample of the wrong species is screened against a small protein reference
-    # set. Hydra's blast() always passes -max_target_seqs, so the only fix
-    # available without editing shared code is to drop the thread count; these
-    # reference sets are a few hundred kilobases, so the cost is small.
-    del threads
-    hsps = blast("tblastn", proteins, assembly_db, out, threads=1,
+    # The thread count is handed straight to blast(), which pins a translated
+    # search to one thread itself; see engines.blast.safe_threads.
+    hsps = blast("tblastn", proteins, assembly_db, out, threads=threads,
                  evalue=1e-10, max_target_seqs=10000, with_alignment=True)
     if not hsps:
         return []
@@ -605,6 +599,43 @@ class MlstProfile:
     loci_found: int = 0
     loci_total: int = 0
     note: str = ""
+
+
+def profile_from_call(mlst, scheme: str, profiles: Path,
+                     accepted: tuple[str, ...] = ()) -> MlstProfile | None:
+    """Turn Hydra's own MLST call into an :class:`MlstProfile`.
+
+    Hydra types the seven housekeeping loci once, in its own MLST step, from
+    its own PubMLST install. When that call belongs to this organism's scheme
+    there is nothing to gain from typing the same loci again -- so the integrated
+    pipeline hands the call in and this converts it, looking the clonal complex
+    up in the module's profile table (Hydra's MlstCall does not carry one).
+
+    Returns ``None`` when the call is unusable: a different scheme, or no
+    sequence type. The caller then falls back to typing the loci itself.
+    """
+    if mlst is None:
+        return None
+    wanted = {s.lower() for s in (accepted or (scheme,))}
+    if str(getattr(mlst, "scheme", "") or "").strip().lower() not in wanted:
+        return None
+    st = str(getattr(mlst, "sequence_type", "") or "").strip()
+    alleles = {k: str(v) for k, v in dict(getattr(mlst, "alleles", {}) or {}).items()}
+    if not st or st == "-":
+        return None
+    _loci, _table, complexes = profile_table(profiles)
+    source = str(getattr(mlst, "source", "") or "assembly")
+    note = (f"the sequence type is Hydra's own MLST call, read from the "
+            f"{scheme} scheme ({source}); the loci were not typed twice")
+    existing = str(getattr(mlst, "note", "") or "")
+    if existing:
+        note = f"{note}; {existing}"
+    return MlstProfile(
+        scheme=scheme, sequence_type=st, clonal_complex=complexes.get(st, ""),
+        alleles=alleles,
+        loci_found=int(getattr(mlst, "loci_found", 0) or 0),
+        loci_total=int(getattr(mlst, "loci_total", 0) or 0),
+        note=note)
 
 
 def call_mlst(assembly: Path, allele_db: Path, profiles: Path, scheme: str, *,

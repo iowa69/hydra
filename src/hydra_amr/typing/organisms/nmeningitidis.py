@@ -639,19 +639,20 @@ def _fetch_amr(root: Path) -> None:
 
 # ------------------------------------------------------------------- typing
 def run(assembly: Path, db_dir: Path, *, threads: int = 1,
-        workdir: Path | None = None) -> list[TypingResult]:
+        workdir: Path | None = None, mlst=None) -> list[TypingResult]:
     """Type one *N. meningitidis* assembly, returning one result per scheme."""
     assembly = Path(assembly)
     root = Path(db_dir) / KEY
     if workdir is not None:
         workdir = Path(workdir)
         workdir.mkdir(parents=True, exist_ok=True)
-        return _run_in(assembly, root, workdir, threads)
+        return _run_in(assembly, root, workdir, threads, mlst)
     with tempdir(prefix="hydra.nmeningitidis.") as work:
-        return _run_in(assembly, root, work, threads)
+        return _run_in(assembly, root, work, threads, mlst)
 
 
-def _run_in(assembly: Path, root: Path, work: Path, threads: int) -> list[TypingResult]:
+def _run_in(assembly: Path, root: Path, work: Path, threads: int,
+            mlst_call=None) -> list[TypingResult]:
     contigs = common.load_contigs(assembly)
     local = work / "assembly.fna"
     common.write_subset(contigs.items(), local)
@@ -659,7 +660,7 @@ def _run_in(assembly: Path, root: Path, work: Path, threads: int) -> list[Typing
 
     capsule = _call_capsule(local, contigs, root, work, threads)
     peptides = _call_peptides(local, contigs, root, work, threads)
-    mlst = _call_mlst(local, root, work, threads)
+    mlst = _call_mlst(local, root, work, threads, mlst_call)
     finetype = _call_finetype(capsule, peptides, mlst)
     bast = _call_bast(peptides, root)
     amr = _call_amr(local, root, work, threads)
@@ -1123,15 +1124,23 @@ def _mendevar(value: str, vaccine: str) -> str:
 
 
 # --------------------------------------------------------------------- MLST
-def _call_mlst(assembly: Path, root: Path, work: Path, threads: int) -> TypingResult:
+def _call_mlst(assembly: Path, root: Path, work: Path, threads: int,
+               mlst=None) -> TypingResult:
     """Seven-locus sequence type and clonal complex."""
     allele_db = root / "mlst" / "mlst.fna"
     profiles = root / "mlst" / "profiles.txt"
-    if not allele_db.exists():
-        return TypingResult(scheme="mlst", call="not determined",
-                            note=f"MLST data missing; run 'hydra db download {KEY}'")
-    profile = common.call_mlst(assembly, allele_db, profiles, "neisseria",
-                               workdir=work, threads=threads)
+    # Hydra's own MLST call first: it types these loci already.
+    profile = common.profile_from_call(mlst, "neisseria", profiles,
+                                       accepted=MLST_SCHEMES)
+    if profile is None:
+        if not allele_db.exists():
+            return TypingResult(
+                scheme="mlst", call="not determined",
+                note=f"MLST data missing; run 'hydra db download typing-{KEY}', "
+                     f"or install Hydra's pubmlst database so the loci are typed "
+                     f"once in the MLST step")
+        profile = common.call_mlst(assembly, allele_db, profiles, "neisseria",
+                                   workdir=work, threads=threads)
     note = profile.note
     if profile.sequence_type != "-" and not profile.clonal_complex:
         note = "; ".join(part for part in [note, (

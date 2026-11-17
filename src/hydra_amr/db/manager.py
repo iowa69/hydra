@@ -457,6 +457,9 @@ class DatabaseStore:
         if self.is_installed(name) and not force:
             LOG.info("%s is already installed", name)
             return
+        if spec.kind == "organism":
+            self.install_organism(name, force=force)
+            return
         work = Path(cache) if cache else self.root / ".download" / name
         if work.exists():
             shutil.rmtree(work)
@@ -467,8 +470,57 @@ class DatabaseStore:
         finally:
             shutil.rmtree(work, ignore_errors=True)
 
+    # ------------------------------------------------------------- organisms
+    @property
+    def organism_dir(self) -> Path:
+        """Where the organism typing modules keep their data."""
+        from ..typing.organisms import registry as organisms
+
+        return self.root / organisms.DB_SUBDIR
+
+    def install_organism(self, name: str, force: bool = False) -> None:
+        """Install one organism typing module's data by running its ``fetch()``.
+
+        The module owns its own download and build: it knows which files it
+        needs, how to pin them and how to verify them. All this adds is the
+        manifest entry, so ``hydra db list`` and ``hydra db info`` show the
+        module's databases with the licence and redistribution status its
+        author recorded.
+        """
+        from ..typing.organisms import registry as organisms
+
+        key = organisms.key_from_database(name) or name
+        entry = organisms.get(key)
+        root = self.organism_dir
+        if entry.installed(root) and not force:
+            LOG.info("%s is already installed", name)
+            return
+        LOG.info("installing %s typing data into %s", entry.title, root / key)
+        entry.fetch(root)
+        missing = entry.missing_databases(root)
+        if missing:
+            LOG.warning("%s: %s could not be installed", entry.title,
+                        ", ".join(missing))
+        self.record(
+            f"typing-{key}", kind="organism",
+            path=str((root / key).relative_to(self.root)),
+            version="; ".join(f"{db.name}: {db.version}" for db in entry.databases),
+            source="; ".join(f"{db.name}: {db.source}" for db in entry.databases),
+            licence=" | ".join(f"{db.name}: {db.licence}" for db in entry.databases),
+            redistribution=", ".join(f"{db.name}={db.redistribution}"
+                                     for db in entry.databases),
+            databases=[db.name for db in entry.databases],
+            missing=missing,
+            sequences="-",
+        )
+
     def import_one(self, spec: DbSpec, source: Path) -> None:
         LOG.info("importing %s from %s", spec.name, source)
+        if spec.kind == "organism":
+            raise HydraError(
+                f"{spec.name} is built by its own module and cannot be imported "
+                f"from a local tool.\n"
+                f"Install it with:  hydra db download {spec.name}")
         if spec.kind == "nucl":
             self._import_nucl(spec, source)
         elif spec.kind == "prot":

@@ -152,6 +152,15 @@ def _add_analysis(parser: argparse.ArgumentParser) -> None:
     group.add_argument("--scheme", default=None, metavar="NAME",
                        help="force a PubMLST scheme instead of choosing automatically")
     _bool_pair(group, "typing", "typing", "run lineage typing (default)", "skip lineage typing")
+    _bool_pair(group, "organism-typing", "organism_typing",
+               "run organism-specific typing for the species found - spa, emm, "
+               "serotype, serovar, PBP and the rest (default)",
+               "skip organism-specific typing")
+    group.add_argument("--organism-module", action="append", default=None,
+                       metavar="KEY",
+                       help="run only these organism typing modules (repeatable); "
+                            "the default is whichever the species or MLST call "
+                            "selects. Names: " + ", ".join(_organism_modules()))
     _bool_pair(group, "protein", "protein",
                "run the translated AMR search (default)", "skip the translated search")
     _bool_pair(group, "point-mutations", "point_mutations",
@@ -547,10 +556,23 @@ def cmd_run(args) -> int:
             raise HydraError(f"unknown --organism '{args.organism}'.{hint}\n"
                              f"List them with: hydra run --list-organisms")
 
+    asked_modules = list(getattr(args, "organism_module", None) or [])
+    if asked_modules:
+        known = _organism_modules()
+        unknown = [name for name in asked_modules if name not in known]
+        if unknown:
+            raise HydraError(
+                f"unknown --organism-module {', '.join(unknown)}.\n"
+                f"Known modules: {', '.join(known) or 'none'}")
+
     options = RunOptions(
         databases=databases,
         mlst=True if args.mlst is None else args.mlst,
         typing=True if args.typing is None else args.typing,
+        organism_typing=(True if getattr(args, "organism_typing", None) is None
+                         else args.organism_typing),
+        organism_modules=(list(getattr(args, "organism_module", None) or [])
+                          or None),
         protein=True if args.protein is None else args.protein,
         point_mutations=True if args.point_mutations is None else args.point_mutations,
         heteroresistance=True if args.heteroresistance is None else args.heteroresistance,
@@ -641,6 +663,7 @@ def cmd_screen(args) -> int:  # noqa: D401 - see below
     if args.db is None:
         args.db = ["ncbi"]
     for name, default in (("mlst", False), ("typing", False),
+                          ("organism_typing", False),
                           ("point_mutations", False), ("heteroresistance", False),
                           ("reads_mlst", False), ("reads_variants", False)):
         if getattr(args, name) is None:
@@ -648,6 +671,16 @@ def cmd_screen(args) -> int:  # noqa: D401 - see below
     if args.protein is None:
         args.protein = "protein" in resolve_names(args.db)
     return cmd_run(args)
+
+
+def _organism_modules() -> list[str]:
+    """The organism typing module keys, for help text and validation."""
+    try:
+        from .typing.organisms import registry as organisms
+
+        return sorted(organisms.modules())
+    except Exception:  # pragma: no cover - never break --help over this
+        return []
 
 
 def cmd_db(args) -> int:
@@ -964,6 +997,22 @@ def _contents(store: DatabaseStore, name: str, entry: dict) -> dict[str, list[st
         skipped = [m for m in modules if m in EXCLUDED_MODULES]
         if skipped:
             listing["not typed"] = skipped
+        return listing
+    if kind == "organism":
+        from .typing.organisms import registry as organism_registry
+
+        key = organism_registry.key_from_database(name)
+        listing: dict[str, list[str]] = {}
+        if key:
+            module = organism_registry.get(key)
+            listing["schemes"] = [db.name for db in module.databases]
+            listing["licences"] = [f"{db.name}: {db.redistribution}"
+                                   for db in module.databases]
+            listing["triggers"] = list(module.species) + [
+                f"MLST {scheme}" for scheme in module.mlst_schemes]
+        missing = sorted(entry.get("missing", []) or [])
+        if missing:
+            listing["not installed"] = missing
         return listing
     if kind == "prot":
         organisms = store.mutation_organisms()

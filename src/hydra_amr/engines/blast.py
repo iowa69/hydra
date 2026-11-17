@@ -101,6 +101,32 @@ def parse_tabular(path: str | Path, with_alignment: bool = False) -> list[Hsp]:
     return out
 
 
+#: The translated BLAST programs. BLAST+ 2.16.0 dies with SIGSEGV on these
+#: whenever ``-max_target_seqs`` is combined with ``-num_threads`` greater than
+#: one and the search returns no hits at all -- which is the normal outcome of
+#: screening an isolate that simply does not carry the panel's genes. Hydra
+#: always passes ``-max_target_seqs`` (every caller needs more than the default
+#: 500 subjects, and dropping the flag would silently truncate the panel
+#: screens), so the thread count is what gives: a translated search is pinned to
+#: one thread here, once, instead of in every caller.
+TRANSLATED_PROGRAMS = ("blastx", "tblastn", "tblastx")
+
+
+def safe_threads(program: str, threads: int) -> int:
+    """The thread count that is safe to give *program*.
+
+    One for a translated search, the requested number otherwise. See
+    :data:`TRANSLATED_PROGRAMS` for why.
+    """
+    threads = max(1, int(threads))
+    if program in TRANSLATED_PROGRAMS and threads > 1:
+        LOG.debug("%s: pinned to a single thread (BLAST+ segfaults on a "
+                  "no-hit translated search with -max_target_seqs and "
+                  "-num_threads > 1)", program)
+        return 1
+    return threads
+
+
 def blast(
     program: str,
     query: str | Path,
@@ -125,10 +151,11 @@ def blast(
     """
     require(program, "sequence search")
     fields = OUTFMT_FIELDS + (ALIGNMENT_FIELDS if with_alignment else ())
+    threads = safe_threads(program, threads)
     cmd: list[str] = [
         program, "-query", str(query), "-db", str(db), "-out", str(out),
         "-outfmt", "6 " + " ".join(fields), "-evalue", str(evalue),
-        "-max_target_seqs", str(max_target_seqs), "-num_threads", str(max(1, threads)),
+        "-max_target_seqs", str(max_target_seqs), "-num_threads", str(threads),
     ]
     if task:
         cmd += ["-task", task]

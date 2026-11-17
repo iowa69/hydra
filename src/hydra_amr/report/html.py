@@ -20,7 +20,7 @@ from .. import __author__, __organisation__, __version__
 from ..records import SampleResult
 from ..utils import LOG
 from .tables import (class_summary, heteroresistance_table, long_table, matrix,
-                     mlst_table, mutation_table, summary_table, typing_table)
+                     mlst_table, mutation_table, summary_table, typing_overview)
 
 _CSS = """
 :root{
@@ -274,6 +274,42 @@ def _heatmap(frame: pd.DataFrame, cell_mode: str, title: str, max_cols: int = 26
     return f'<h3>{_esc(title)}</h3>' + "".join(out) + "".join(legend) + note
 
 
+def _typing_detail_html(results: Sequence[SampleResult]) -> str:
+    """Per-sample organism typing: every call, its evidence and its caveats.
+
+    This is the section a clinical microbiologist reads: what was found, what it
+    was read from, and what could not be determined. Nothing is summarised away
+    -- a caveat that is not shown is a caveat that will not be acted on.
+    """
+    typed = [r for r in results if r.typing]
+    if not typed:
+        return ""
+    parts = ["<h2>Organism typing: the calls and their evidence</h2>",
+             '<div class="sub">One block per sample. <strong>Evidence</strong> is what the '
+             'call was read from: alleles, residues, identity and coverage, contig '
+             'coordinates, database version. <strong>Caveats</strong> names what is '
+             'provisional, what disagreed and what could not be determined; "not '
+             'determined" is never a negative result.</div>']
+    for result in typed:
+        parts.append(f'<details open><summary><strong>{_esc(result.sample)}</strong> '
+                     f'&middot; {_esc(result.species.name or "species not determined")}'
+                     f'</summary>')
+        frame = pd.DataFrame([t.as_detail_row() for t in result.typing])
+        frame = frame.rename(columns={"scheme_name": "scheme (name)",
+                                      "loci": "loci found"})
+        parts.append(_frame_to_html(frame, f"tbl-typing-{_slug(result.sample)}",
+                                    sortable=False))
+        if result.warnings:
+            items = "".join(f"<li>{_esc(w)}</li>" for w in result.warnings)
+            parts.append(f'<div class="sub">Run notes for this sample:<ul>{items}</ul></div>')
+        parts.append("</details>")
+    return "".join(parts)
+
+
+def _slug(text: str) -> str:
+    return "".join(c if c.isalnum() else "-" for c in str(text))[:40] or "sample"
+
+
 def render(results: Sequence[SampleResult], *, cell: str = "binary",
            title: str = "Hydra report", databases: Sequence[str] = (),
            command: str = "", extra: dict | None = None,
@@ -367,10 +403,15 @@ def render(results: Sequence[SampleResult], *, cell: str = "binary",
         parts.append("<h2>MLST</h2>")
         parts.append(_frame_to_html(mlst, "tbl-mlst"))
 
-    typing = typing_table(results)
-    if not typing.empty and typing.shape[1] > 2:
-        parts.append("<h2>Lineage typing and scores</h2>")
-        parts.append(_frame_to_html(typing, "tbl-typing"))
+    overview = typing_overview(results)
+    if not overview.empty and overview.shape[1] > 2:
+        parts.append("<h2>Typing calls and scores</h2>")
+        parts.append('<div class="sub">Every call Hydra made, one column per scheme. '
+                     'A <code>_note</code> column beside a call is its qualification: '
+                     'read it before reporting the call.</div>')
+        parts.append(_frame_to_html(overview, "tbl-typing"))
+
+    parts.append(_typing_detail_html(results))
 
     parts.append("<h2>All detected elements</h2>")
     parts.append('<div class="controls"><input type="search" data-filter="tbl-long" '

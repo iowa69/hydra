@@ -67,14 +67,46 @@ def mlst_table(results: Sequence[SampleResult]) -> pd.DataFrame:
     return pd.DataFrame(rows) if rows else pd.DataFrame(columns=["sample", "scheme", "ST"])
 
 
+#: Columns of the long-form typing table.
+TYPING_COLUMNS = ("sample", "species", "scheme", "scheme_name", "call", "lineage",
+                  "loci", "evidence", "caveats")
+
+
 def typing_table(results: Sequence[SampleResult]) -> pd.DataFrame:
-    """Per-sample lineage typing calls."""
+    """One row per typing call, with the evidence it rests on and its caveats.
+
+    The wide view in :func:`typing_overview` names the calls; this is the table
+    that says what each one was read from. ``evidence`` is the module's
+    ``alleles`` mapping -- alleles, residues, identities, coordinates, database
+    versions -- and ``caveats`` is its ``note``: what could not be determined,
+    what is provisional, what disagreed. Neither reached the reports before, so
+    a call could be read without being checked.
+    """
+    rows = []
+    for result in results:
+        for typing in result.typing:
+            rows.append(typing.as_detail_row(sample=result.sample,
+                                             species=result.species.name or "-"))
+    if not rows:
+        return pd.DataFrame(columns=list(TYPING_COLUMNS))
+    return pd.DataFrame(rows)[list(TYPING_COLUMNS)]
+
+
+def typing_overview(results: Sequence[SampleResult]) -> pd.DataFrame:
+    """Per-sample typing calls, one column per scheme, plus the scores.
+
+    The headline view: what every sample was called. A scheme that carries a
+    caveat gets a ``<scheme>_note`` column beside it, so a reader of this table
+    alone is never shown a call whose qualification is hidden.
+    """
     rows = []
     for result in results:
         row = {"sample": result.sample, "species": result.species.name}
         for typing in result.typing:
             row[typing.scheme] = typing.call
             row[f"{typing.scheme}_lineage"] = typing.lineage
+            if typing.note:
+                row[f"{typing.scheme}_note"] = typing.note
         row.update(result.scores)
         rows.append(row)
     return pd.DataFrame(rows) if rows else pd.DataFrame(columns=["sample"])

@@ -23,6 +23,7 @@ from .typing.cassette import CassetteTyper
 from .typing.lineage import (LineageTyper, esbl_alleles, is_intrinsic,
                              resistance_score, virulence_score)
 from .typing.mlst import MlstTyper
+from .typing.organisms import registry as organisms
 from .typing.species import SpeciesIdentifier
 from .utils import LOG, HydraError, check_workspace, human_time
 
@@ -34,6 +35,12 @@ class RunOptions:
     databases: list[str] = field(default_factory=lambda: ["ncbi"])
     mlst: bool = True
     typing: bool = True
+    #: Organism-specific typing (the modules under typing.organisms). Gated by
+    #: ``typing`` as well, so --no-typing turns everything off at once.
+    organism_typing: bool = True
+    #: Restrict organism typing to these module keys; None means "whichever
+    #: modules the species and MLST calls select".
+    organism_modules: list[str] | None = None
     protein: bool = True
     point_mutations: bool = True
     reads_genes: bool = True
@@ -185,6 +192,7 @@ class Pipeline:
             self._assembly_qc(assemblies, results)
             organism_by_sample = self._identify(batch, assemblies, results, workdir)
             self._screen_assemblies(batch, results, organism_by_sample, workdir)
+            self._type_organisms(assemblies, results, workdir)
             # Name what exactly mutated, from each assembly's own sequence.
             for sample, path in assemblies.items():
                 if sample in results:
@@ -349,6 +357,37 @@ class Pipeline:
                     species_by_sample=species_by_sample).items():
                 if sample in results:
                     results[sample].typing.extend(typing)
+
+    def _type_organisms(self, assemblies: dict[str, Path],
+                        results: dict[str, SampleResult], workdir: Path) -> None:
+        """Organism-specific typing, chosen by species and then by MLST scheme.
+
+        Assemblies only: every scheme here is read off contigs, and none of them
+        can be resolved from reads without first assembling them. A module whose
+        database is not installed is skipped with the reason recorded against
+        the sample, so the report says what was not done.
+        """
+        if not (self.options.typing and self.options.organism_typing):
+            return
+        db_dir = self.store.root / organisms.DB_SUBDIR
+        for sample, path in assemblies.items():
+            result = results.get(sample)
+            if result is None:
+                continue
+            chosen = organisms.select(result.species, result.mlst,
+                                      only=self.options.organism_modules)
+            if not chosen:
+                continue
+            LOG.info("%s: organism typing with %s", sample,
+                     ", ".join(entry.title for entry in chosen))
+            warnings: list[str] = []
+            typed = organisms.type_assembly(
+                path, db_dir, species=result.species, mlst=result.mlst,
+                threads=self.config.threads,
+                workdir=workdir / "organisms" / sample,
+                only=self.options.organism_modules, warn=warnings)
+            result.typing.extend(typed)
+            result.warnings.extend(warnings)
 
     def _dna_mutations(self, batch: QueryBatch, results: dict[str, SampleResult],
                        organism_by_sample: dict[str, str | None], protein: ProteinScreener,

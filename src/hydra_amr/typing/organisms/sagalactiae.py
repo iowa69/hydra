@@ -58,7 +58,6 @@ from ...seqio import read_fasta
 from ...utils import LOG, HydraError, tempdir
 from .base import OrganismDb, Reference
 from .strep_common import (
-    BLASTX_THREADS,
     GeneHit,
     GeneSpec,
     PanelSource,
@@ -1044,11 +1043,10 @@ def _call_pbp2x(assembly: Path, root: Path, work: Path,
                  f"module's fetch() first")
     check_db_exists(fasta, "prot")
     work.mkdir(parents=True, exist_ok=True)
-    # Single-threaded on purpose: see strep_common.BLASTX_THREADS. pbp2x is a
-    # one-protein database, so a negative sample is exactly the case that
-    # crashes blastx when it is given several threads.
+    # blast() pins a translated search to one thread itself (see
+    # engines.blast.safe_threads), so the requested count is passed through.
     hsps = blast("blastx", assembly, fasta, work / "pbp2x.blastx.tsv",
-                 threads=BLASTX_THREADS, evalue=1e-40, with_alignment=True)
+                 threads=threads, evalue=1e-40, with_alignment=True)
     if not hsps:
         return TypingResult(
             scheme="sag_pbp2x", call="not determined", loci_total=1,

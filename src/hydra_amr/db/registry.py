@@ -173,6 +173,48 @@ _register(DbSpec(
 ))
 
 
+# --------------------------------------------------------------------------
+# Organism-specific typing databases, one per module under
+# ``hydra_amr.typing.organisms``. Registered from the modules themselves so the
+# source, version, licence and redistribution status shown by ``hydra db info``
+# are the ones the module author recorded, never a second copy of them.
+# --------------------------------------------------------------------------
+def _register_organism_databases() -> None:
+    try:
+        from ..typing.organisms import registry as organisms
+    except Exception:  # pragma: no cover - never let this break the db CLI
+        return
+    for key, entry in organisms.modules().items():
+        parts = entry.databases
+        sources = "; ".join(f"{db.name}: {db.source}" for db in parts)
+        licences = " | ".join(f"{db.name}: {db.licence}" for db in parts)
+        redistribution = ", ".join(f"{db.name}={db.redistribution}" for db in parts)
+        citations = "; ".join(sorted({ref.key for ref in entry.references}))
+        _register(DbSpec(
+            name=f"typing-{key}",
+            kind="organism",
+            title=f"{entry.title} organism typing data",
+            element_type="TYPING",
+            url=sources,
+            citation=citations,
+            licence=licences,
+            notes=(f"Installed by the module's own fetch(). {len(parts)} "
+                   f"database(s): {', '.join(db.name for db in parts)}. "
+                   f"Redistribution: {redistribution}. Triggered by the species "
+                   f"call ({', '.join(entry.species) or '-'}) or the MLST scheme "
+                   f"({', '.join(entry.mlst_schemes) or '-'})."),
+            aliases=(key,),
+        ))
+
+
+_register_organism_databases()
+
+
+#: The organism typing database names, for the CLI and the groups below.
+ORGANISM_DATABASES: tuple[str, ...] = tuple(
+    name for name, spec in DATABASES.items() if spec.kind == "organism")
+
+
 #: Convenience groups usable anywhere a database name is accepted.
 DB_GROUPS: dict[str, tuple[str, ...]] = {
     "all": tuple(n for n, s in DATABASES.items() if s.kind in ("nucl", "prot") and not s.typing_only),
@@ -181,6 +223,7 @@ DB_GROUPS: dict[str, tuple[str, ...]] = {
     "virulence": ("vfdb", "ecoli_vf"),
     "nucl": tuple(n for n, s in DATABASES.items() if s.kind == "nucl" and not s.typing_only),
     "core": ("ncbi", "vfdb"),
+    "organisms": ORGANISM_DATABASES,
 }
 
 

@@ -1008,16 +1008,12 @@ def _residues_from_hsp(hsp: Hsp, wanted: tuple[int, ...]) -> dict[int, str]:
 
 def _stx(assembly: Path, root: Path, workdir: Path, threads: int) -> TypingResult:
     fasta = _require_db(root, "stxtyper/stx.prot", "the StxTyper reference proteins")
-    # Single-threaded deliberately, and not for want of trying: BLAST+ 2.16.0
-    # blastx segfaults (SIGSEGV, exit -11) whenever -max_target_seqs is given
-    # together with -num_threads > 1 and the search finds nothing. Hydra's
-    # blast() always passes -max_target_seqs, and a stx-negative isolate -
-    # which is most isolates - is exactly the no-hit case, so every negative
-    # sample crashed. Reproduced on 2.16.0+ at every max_target_seqs value from
-    # 160 to 10000, and never at -num_threads 1. The search itself is cheap:
-    # the database is 160 short proteins, about a second against a 5 Mb genome.
+    # A stx-negative isolate - which is most isolates - is the no-hit case
+    # that used to segfault blastx with several threads; blast() now pins a
+    # translated search to one thread itself (engines.blast.safe_threads), so
+    # the requested thread count is passed straight through.
     hsps = blast("blastx", assembly, fasta, workdir / "ecoli.stx.tsv",
-                 threads=1, evalue=1e-10, max_target_seqs=10000,
+                 threads=threads, evalue=1e-10, max_target_seqs=10000,
                  with_alignment=True)
     hsps = [h for h in hsps if h.pident >= STX_MIN_IDENTITY]
     if not hsps:

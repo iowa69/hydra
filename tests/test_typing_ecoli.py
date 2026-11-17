@@ -9,7 +9,6 @@ set, because they need about 50 MB of downloads and BLAST+.
 from __future__ import annotations
 
 import os
-import re
 import shutil
 import urllib.request
 import zipfile

@@ -54,7 +54,6 @@ frozen Windows build. SCCmec is deliberately absent: Hydra's existing
 from __future__ import annotations
 
 import json
-import re
 import time
 import urllib.error
 import urllib.request
@@ -863,21 +862,11 @@ def fetch(db_dir: Path) -> None:
     if not (profiles.exists() and profiles.stat().st_size > 10_000):
         LOG.info("saureus: downloading the PubMLST saureus profile table")
         _get(PUBMLST_PROFILES, profiles)
-    alleles = mlst_dir / "alleles.fna"
-    if not (alleles.exists() and alleles.stat().st_size > 1_000_000):
-        LOG.info("saureus: downloading the 7 PubMLST saureus allele sets")
-        records = []
-        for locus in MLST_LOCI:
-            raw = mlst_dir / f"{locus}.tfa"
-            _get("https://rest.pubmlst.org/db/pubmlst_saureus_seqdef/loci/"
-                 f"{locus}/alleles_fasta", raw)
-            for header, seq in read_fasta(raw):
-                name = header.split()[0]
-                allele = name.rsplit("_", 1)[-1]
-                records.append((f"{locus}_{allele}", seq))
-            raw.unlink()
-        write_fasta(alleles, records)
-    _makeblastdb(alleles)
+    # The seven allele sets are deliberately NOT downloaded. Hydra types the
+    # MLST loci itself, from its own PubMLST install, and hands the sequence
+    # type to run(); downloading the same alleles again to type them a second
+    # time cost about 6 MB and a BLAST pass per genome for an identical answer.
+    # The profile table above stays, because the clonal complex is read from it.
 
     (root / "manifest.json").write_text(json.dumps({
         "key": KEY,
@@ -2002,7 +1991,11 @@ def _sequence_type(assembly: Path, root: Path, workdir: Path,
     alleles_file = root / "mlst" / "alleles.fna"
     profiles_file = root / "mlst" / "profiles.tsv"
     if not alleles_file.exists() or not profiles_file.exists():
-        return "", {}, "the PubMLST saureus allele sets are not installed"
+        return "", {}, ("no sequence type was available: Hydra's own MLST call "
+                        "was not passed in, and this module no longer ships a "
+                        "second copy of the PubMLST allele sets. Install the "
+                        "pubmlst database (hydra db download pubmlst) so the "
+                        "seven loci are typed once")
     db = workdir / "assembly"
     hsps = blast("blastn", alleles_file, db, workdir / "mlst.tsv",
                  threads=threads, evalue=1e-40, task="megablast",
@@ -2037,9 +2030,37 @@ def _sequence_type(assembly: Path, root: Path, workdir: Path,
 
 
 # ------------------------------------------------------------------------ run
+def _st_from_call(mlst) -> tuple[str, dict[str, str], str]:
+    """Read a usable sequence type out of Hydra's own MLST call.
+
+    Returns the same triple as :func:`_sequence_type`, so the two are
+    interchangeable. The scheme is checked: an ST from another organism's
+    scheme would place the isolate in a *S. aureus* clonal complex it has
+    nothing to do with.
+    """
+    if mlst is None:
+        return "", {}, "no MLST call was passed in"
+    scheme = str(getattr(mlst, "scheme", "") or "").strip().lower()
+    if scheme not in {s.lower() for s in MLST_SCHEMES}:
+        shown = scheme or "-"
+        return "", {}, (f"Hydra's MLST call is from scheme '{shown}', not the "
+                        f"S. aureus scheme, so it cannot name a clonal complex")
+    alleles = {k: str(v) for k, v in dict(getattr(mlst, "alleles", {}) or {}).items()}
+    st = str(getattr(mlst, "sequence_type", "") or "").strip()
+    if not st.isdigit():
+        return "", alleles, (f"Hydra's MLST call assigned no sequence type "
+                             f"(ST reported as {st or '-'})")
+    return st, alleles, ""
+
+
 def run(assembly: Path, db_dir: Path, *, threads: int = 1,
-        workdir: Path | None = None) -> list[TypingResult]:
-    """Type one *S. aureus* assembly, one :class:`TypingResult` per scheme."""
+        workdir: Path | None = None, mlst=None) -> list[TypingResult]:
+    """Type one *S. aureus* assembly, one :class:`TypingResult` per scheme.
+
+    ``mlst`` is Hydra's own :class:`~hydra_amr.records.MlstCall`. When it is
+    given, the clonal complex is derived from it rather than typing the seven
+    housekeeping loci a second time.
+    """
     assembly = Path(assembly)
     root = Path(db_dir) / KEY
     workdir = Path(workdir) if workdir is not None else assembly.parent
@@ -2081,8 +2102,14 @@ def run(assembly: Path, db_dir: Path, *, threads: int = 1,
     results.append(_iec(best, hlb))
     results.append(_acme(best))
 
-    sequence_type, mlst_alleles, problem = _sequence_type(
-        assembly, root, workdir, threads)
+    sequence_type, mlst_alleles, problem = _st_from_call(mlst)
+    if not sequence_type:
+        from_db, db_alleles, db_problem = _sequence_type(
+            assembly, root, workdir, threads)
+        if from_db:
+            sequence_type, mlst_alleles, problem = from_db, db_alleles, db_problem
+        elif db_alleles:
+            mlst_alleles, problem = db_alleles, db_problem
     if sequence_type:
         results.append(clonal_complex(sequence_type, db_dir))
     else:

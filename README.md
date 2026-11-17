@@ -163,6 +163,8 @@ A preset only sets defaults; anything passed explicitly wins.
 | `--mlst` / `--no-mlst` | run MLST (default) / skip it |
 | `--scheme NAME` | force a PubMLST scheme instead of choosing automatically |
 | `--typing` / `--no-typing` | run lineage and SCCmec typing (default) / skip |
+| `--organism-typing` / `--no-organism-typing` | run organism-specific typing for the species found (default) / skip |
+| `--organism-module KEY` | run only this organism typing module (repeatable) |
 | `--protein` / `--no-protein` | run the translated AMR search (default) / skip |
 | `--point-mutations` / `--no-point-mutations` | call resistance point mutations (default) / skip |
 | `--heteroresistance` / `--no-heteroresistance` | measure allele fractions from reads (default with reads) / skip |
@@ -369,15 +371,51 @@ DRR199175     klebsiella  101  assembly   7           7           2     6     1
 ERR1015312    klebsiella  15   assembly   7           7           1     1     1
 ```
 
-### `hydra.typing.tsv` — lineage, capsule, SCCmec and scores
+### `hydra.typing.tsv` — every call, the evidence behind it, and the caveats
 
-22 columns: `AbST` aerobactin, `cbST` colibactin, `RmST`/`rmpA2` hypermucoidy, `SmST`
-salmochelin, `ybST` yersiniabactin, `wzi` capsule, `SCCmec` for staphylococci, each
-with its lineage, plus the scores.
+One row per typing call: the scheme, its readable name, the call, the lineage, how
+many loci were found, **the evidence the call rests on** and **the caveats**. The
+evidence column is the alleles, residues, identities, coordinates and database
+version the module read the call from; the caveats column is what is provisional,
+what disagreed, and what could not be determined. A call you cannot check is a call
+you cannot use, so both are in the table.
+
+```
+sample   scheme  scheme_name          call   lineage  loci  evidence                                            caveats
+ISO-1    spa     spa type (Ridom)     t008   -        1/1   repeats=11-19-12-21-17-34-24-34-22-25; evidence=...  the Ridom database is non-commercial
+ISO-1    agr     agr group            II     -        1/1   agrD_variant=II; identity=99.3%; contig_2:41k-45k
+ISO-1    sccmec  SCCmec type          IVa    -        -     ccr=ccrAB2; mec=class B; coverage=97.1%
+```
+
+### `hydra.typing.overview.tsv` — the headline calls, one row per isolate
+
+The wide view: one column per scheme, plus `<scheme>_note` beside any call that
+carries a caveat, plus the lineage scores (`AbST` aerobactin, `cbST` colibactin,
+`RmST`/`rmpA2` hypermucoidy, `SmST` salmochelin, `ybST` yersiniabactin, `wzi`
+capsule, `SCCmec` for staphylococci).
 
 ```
 sample        ybST  ybST_lineage      AbST  AbST_lineage  RmST_lineage    wzi   virulence_score
 ERR11578027   41    ybt 12; ICEKp10   3     iuc 2         rmp 2; KpVP-2   257   5
+```
+
+### Organism-specific typing
+
+Beyond the lineage schemes above, Hydra applies the typing a clinical or
+public-health laboratory reports for the organism it found: spa and *agr* for
+*S. aureus*, emm for *S. pyogenes*, capsular serotype for *S. agalactiae* and
+*S. pneumoniae*, the *cap* locus and PBP3 for *H. influenzae*, serogroup and fine
+type for *N. meningitidis*, the serovar for *Salmonella*, pathotype and phylogroup
+for *E. coli* and *Shigella*. It runs automatically from the species call, or from
+the MLST scheme when there is no species call.
+
+What is typed for each organism, what each call means, the rules and thresholds,
+the limits of working from a draft assembly, the provenance and licence of every
+database and the validation tables are in **[docs/typing/](docs/typing/README.md)**.
+
+```
+hydra db download organisms        # install the data for every module
+hydra db info typing-saureus       # source, version, licence, redistribution
 ```
 
 ### `hydra.html` — the same content as a report

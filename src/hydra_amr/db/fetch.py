@@ -539,7 +539,18 @@ FETCHERS: dict[str, Callable[..., Path]] = {
 
 
 def can_fetch(name: str) -> bool:
-    return name in FETCHERS
+    """True when ``hydra db download <name>`` can install *name* unattended.
+
+    The organism typing databases are built by their own modules' ``fetch()``
+    rather than by a stager here, so they are fetchable without appearing in
+    :data:`FETCHERS`.
+    """
+    if name in FETCHERS:
+        return True
+    from .registry import DATABASES  # local: registry imports nothing from here
+
+    spec = DATABASES.get(name)
+    return bool(spec and spec.kind == "organism")
 
 
 def stage(name: str, work: Path, progress=None) -> Path:

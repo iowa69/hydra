@@ -33,7 +33,7 @@ from pathlib import Path
 from ...engines.blast import blast, deduplicate, merge_hsps, overlap_length
 from ...records import TypingResult
 from ...seqio import read_fasta
-from ...utils import LOG, HydraError, tempdir, translate
+from ...utils import LOG, HydraError, tempdir
 from . import _hinf_nmen_common as common
 from .base import OrganismDb, Reference
 
@@ -600,19 +600,20 @@ def _region_of(gene: str) -> tuple[str, str]:
 
 
 def run(assembly: Path, db_dir: Path, *, threads: int = 1,
-        workdir: Path | None = None) -> list[TypingResult]:
+        workdir: Path | None = None, mlst=None) -> list[TypingResult]:
     """Type one *H. influenzae* assembly, returning one result per scheme."""
     assembly = Path(assembly)
     root = Path(db_dir) / KEY
     if workdir is not None:
         workdir = Path(workdir)
         workdir.mkdir(parents=True, exist_ok=True)
-        return _run_in(assembly, root, workdir, threads)
+        return _run_in(assembly, root, workdir, threads, mlst)
     with tempdir(prefix="hydra.hinfluenzae.") as work:
-        return _run_in(assembly, root, work, threads)
+        return _run_in(assembly, root, work, threads, mlst)
 
 
-def _run_in(assembly: Path, root: Path, work: Path, threads: int) -> list[TypingResult]:
+def _run_in(assembly: Path, root: Path, work: Path, threads: int,
+            mlst=None) -> list[TypingResult]:
     results: list[TypingResult] = []
     contigs = common.load_contigs(assembly)
     local = work / "assembly.fna"
@@ -623,7 +624,7 @@ def _run_in(assembly: Path, root: Path, work: Path, threads: int) -> list[Typing
     pbp3 = _call_pbp3(local, contigs, root, work, threads)
     results.append(pbp3)
     results.append(_call_beta_lactam(local, root, work, threads, pbp3))
-    results.append(_call_mlst(local, root, work, threads))
+    results.append(_call_mlst(local, root, work, threads, mlst))
     return results
 
 
@@ -1189,15 +1190,23 @@ def _call_beta_lactam(assembly: Path, root: Path, work: Path, threads: int,
 
 
 # --------------------------------------------------------------------- MLST
-def _call_mlst(assembly: Path, root: Path, work: Path, threads: int) -> TypingResult:
+def _call_mlst(assembly: Path, root: Path, work: Path, threads: int,
+               mlst=None) -> TypingResult:
     """Seven-locus sequence type from the PubMLST *H. influenzae* scheme."""
     allele_db = root / "mlst" / "mlst.fna"
     profiles = root / "mlst" / "profiles.txt"
-    if not allele_db.exists():
-        return TypingResult(scheme="mlst", call="not determined",
-                            note=f"MLST data missing; run 'hydra db download {KEY}'")
-    profile = common.call_mlst(assembly, allele_db, profiles, "hinfluenzae",
-                               workdir=work, threads=threads)
+    # Hydra's own MLST call first: it types these loci already.
+    profile = common.profile_from_call(mlst, "hinfluenzae", profiles,
+                                       accepted=MLST_SCHEMES)
+    if profile is None:
+        if not allele_db.exists():
+            return TypingResult(
+                scheme="mlst", call="not determined",
+                note=f"MLST data missing; run 'hydra db download typing-{KEY}', "
+                     f"or install Hydra's pubmlst database so the loci are typed "
+                     f"once in the MLST step")
+        profile = common.call_mlst(assembly, allele_db, profiles, "hinfluenzae",
+                                   workdir=work, threads=threads)
     alleles = dict(profile.alleles)
     note = profile.note
     lineage = profile.clonal_complex or "-"
