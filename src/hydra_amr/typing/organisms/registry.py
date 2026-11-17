@@ -18,16 +18,18 @@ never with a fabricated negative.
 
 from __future__ import annotations
 
+import gzip
 import importlib
 import pkgutil
 import re
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
 from typing import Iterable, Sequence
 
 from ...records import MlstCall, SpeciesCall, TypingResult
-from ...utils import LOG, HydraError
+from ...utils import LOG, HydraError, tempdir
 from .base import OrganismDb, Reference
 
 #: The organism modules, named explicitly. A frozen Windows build cannot walk
@@ -508,6 +510,39 @@ def relabel(results: Iterable[TypingResult], organism: str = "",
     return out
 
 
+def plain_fasta(assembly: Path, workdir: Path) -> Path:
+    """A path BLAST+ can read: a gzipped assembly is expanded into *workdir*.
+
+    BLAST+ cannot read a compressed FASTA, and the modules hand the assembly
+    straight to ``makeblastdb`` and ``blastn``. Hydra accepts ``.gz`` input --
+    which is how most assemblies arrive -- so without this every organism
+    module fails on a gzipped genome with "makeblastdb failed". Expanded once
+    here rather than in eight modules.
+
+    The magic bytes decide, not the suffix: a gzipped file named ``.fna`` is
+    common, and a plain file named ``.gz`` is not unknown either.
+    """
+    assembly = Path(assembly)
+    try:
+        with open(assembly, "rb") as handle:
+            compressed = handle.read(2) == b"\x1f\x8b"
+    except OSError as exc:
+        raise HydraError(f"cannot read {assembly}: {exc}") from exc
+    if not compressed:
+        return assembly
+    workdir.mkdir(parents=True, exist_ok=True)
+    plain = workdir / (assembly.name[:-3] if assembly.suffix == ".gz"
+                       else assembly.name + ".fna")
+    if plain.exists() and plain.stat().st_size:
+        return plain
+    LOG.debug("organism typing: expanding %s to %s", assembly.name, plain)
+    with gzip.open(assembly, "rb") as src, open(plain, "wb") as out:
+        shutil.copyfileobj(src, out)
+    if not plain.stat().st_size:
+        raise HydraError(f"{assembly} expanded to an empty file")
+    return plain
+
+
 # ----------------------------------------------------------------- top level
 def type_assembly(assembly: Path | str, db_dir: Path | str, *,
                   species: SpeciesCall | None = None,
@@ -522,8 +557,38 @@ def type_assembly(assembly: Path | str, db_dir: Path | str, *,
     was not done and why rather than leaving a gap.
     """
     db_dir = Path(db_dir)
+    chosen = select(species, mlst, only=only)
+    if not chosen:
+        return []
+    temporary: str | None = None
+    if workdir is None:
+        manager = tempdir(prefix="hydra.organisms.")
+        temporary = manager.__enter__()
+        work = Path(temporary)
+    else:
+        work = Path(workdir)
+        work.mkdir(parents=True, exist_ok=True)
+    try:
+        return _type_with(chosen, assembly, db_dir, work, mlst, threads, warn)
+    finally:
+        if temporary is not None:
+            manager.__exit__(None, None, None)
+
+
+def _type_with(chosen: list[OrganismModule], assembly: Path | str, db_dir: Path,
+               work: Path, mlst: MlstCall | None, threads: int,
+               warn: list[str] | None) -> list[TypingResult]:
     out: list[TypingResult] = []
-    for entry in select(species, mlst, only=only):
+    # Expanded on first use, not up front: a module whose database is missing
+    # is skipped before the assembly is touched at all.
+    plain: list[Path] = []
+
+    def readable() -> Path:
+        if not plain:
+            plain.append(plain_fasta(Path(assembly), work))
+        return plain[0]
+
+    for entry in chosen:
         if not entry.installed(db_dir):
             message = (f"{entry.title} typing skipped: its database is not "
                        f"installed. Install it with:  "
@@ -534,8 +599,8 @@ def type_assembly(assembly: Path | str, db_dir: Path | str, *,
             continue
         missing = entry.missing_databases(db_dir)
         try:
-            results = entry.run(assembly, db_dir, threads=threads, workdir=workdir,
-                                mlst=mlst)
+            results = entry.run(readable(), db_dir, threads=threads,
+                                workdir=work / entry.key, mlst=mlst)
         except HydraError as exc:
             message = f"{entry.title} typing failed: {exc}"
             LOG.warning("%s", message)

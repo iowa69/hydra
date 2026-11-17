@@ -203,6 +203,8 @@ def test_a_module_that_raises_does_not_end_the_run(tmp_path, monkeypatch):
     entry = registry.get("saureus")
     (tmp_path / "saureus" / "markers").mkdir(parents=True)
     (tmp_path / "saureus" / "markers" / "markers.fna").write_text(">x\nACGT\n")
+    assembly = tmp_path / "x.fna"
+    assembly.write_text(">contig_1\nACGTACGT\n")
 
     def boom(*_args, **_kwargs):
         from hydra_amr.utils import HydraError
@@ -211,11 +213,65 @@ def test_a_module_that_raises_does_not_end_the_run(tmp_path, monkeypatch):
 
     monkeypatch.setattr(entry.module, "run", boom)
     warn: list[str] = []
-    out = registry.type_assembly(tmp_path / "x.fna", tmp_path,
+    out = registry.type_assembly(assembly, tmp_path,
                                  species=SpeciesCall(name="Staphylococcus aureus"),
                                  warn=warn)
     assert out == []
     assert "the marker panel is corrupt" in warn[0]
+
+
+def test_a_gzipped_assembly_is_expanded_before_any_module_sees_it(tmp_path):
+    """BLAST+ cannot read a compressed FASTA, and Hydra accepts .gz input.
+
+    Without this every organism module died with "makeblastdb failed" on a
+    gzipped genome, which is how most assemblies arrive.
+    """
+    import gzip as _gzip
+
+    source = tmp_path / "ISOLATE.fna.gz"
+    with _gzip.open(source, "wt") as handle:
+        handle.write(">contig_1\nACGTACGTACGT\n")
+    work = tmp_path / "work"
+    plain = registry.plain_fasta(source, work)
+    assert plain != source
+    assert plain.parent == work
+    assert plain.read_text().startswith(">contig_1")
+    # Called twice, expanded once.
+    assert registry.plain_fasta(source, work) == plain
+    # A plain file is handed through untouched, whatever it is called.
+    flat = tmp_path / "plain.fna"
+    flat.write_text(">c\nACGT\n")
+    assert registry.plain_fasta(flat, work) == flat
+    misnamed = tmp_path / "actually-plain.gz"
+    misnamed.write_text(">c\nACGT\n")
+    assert registry.plain_fasta(misnamed, work) == misnamed
+
+
+def test_a_module_is_given_the_expanded_assembly(tmp_path, monkeypatch):
+    import gzip as _gzip
+
+    entry = registry.get("saureus")
+    (tmp_path / "db" / "saureus" / "markers").mkdir(parents=True)
+    (tmp_path / "db" / "saureus" / "markers" / "markers.fna").write_text(">x\nACGT\n")
+    source = tmp_path / "ISOLATE.fna.gz"
+    with _gzip.open(source, "wt") as handle:
+        handle.write(">contig_1\nACGTACGTACGT\n")
+    seen: dict = {}
+
+    def record(assembly, db_dir, **kwargs):
+        seen["assembly"] = Path(assembly)
+        seen["workdir"] = kwargs.get("workdir")
+        return [TypingResult(scheme="spa", call="t008")]
+
+    monkeypatch.setattr(entry.module, "run", record)
+    out = registry.type_assembly(source, tmp_path / "db",
+                                 species=SpeciesCall(name="Staphylococcus aureus"),
+                                 workdir=tmp_path / "work")
+    assert [t.call for t in out] == ["t008"]
+    assert seen["assembly"].suffix != ".gz"
+    assert seen["assembly"].read_text().startswith(">contig_1")
+    # Each module gets its own scratch directory under the sample's.
+    assert seen["workdir"] == tmp_path / "work" / "saureus"
 
 
 # ------------------------------------------------------- MLST pass-through
