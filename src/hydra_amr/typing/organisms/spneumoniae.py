@@ -767,7 +767,43 @@ REFERENCES: tuple[Reference, ...] = (
         doi="10.1186/s12864-017-4017-7", pmid="28810827",
         supports="the behaviour of the prediction for PBP types absent from the "
                  "reference table, which is why this module reports such a "
-                 "triplet without an MIC rather than extrapolating",
+                 "triplet without an MIC rather than extrapolating. Its "
+                 "leave-one-type-out validation is the evidence for NOT adding "
+                 "a nearest-neighbour mode-MIC model: on new PBP types that "
+                 "model gave essential agreement below 90% for amoxicillin and "
+                 "cefotaxime and \"unacceptably high vmj rates for 4 of the 6 "
+                 "antibiotics, with 3 of them higher than 50%\" - resistant "
+                 "isolates predicted susceptible - and the paper's conclusion "
+                 "endorses the random forest, which cannot be built under this "
+                 "project's rules. See docs/typing/spneumoniae.md section 2.4a",
+    ),
+    Reference(
+        key="Hung2025",
+        authors="Hung HCH, Kumar N, Dyster V, et al.",
+        year=2025,
+        title="GPS Pipeline: portable, scalable genomic pipeline for "
+              "Streptococcus pneumoniae surveillance from Global Pneumococcal "
+              "Sequencing Project",
+        journal="Nature Communications 16:8345",
+        doi="10.1038/s41467-025-64018-5", pmid="40993121",
+        supports="the current production implementation of the CDC PBP MIC "
+                 "prediction, and the largest independent evaluation of it "
+                 "(1,273 genomes with broth-dilution MICs), in which penicillin "
+                 "was the weakest of the six drugs; this is the context for how "
+                 "far the prediction travels outside US surveillance",
+    ),
+    Reference(
+        key="Eriksen2023",
+        authors="Eriksen HB, Fuursted K, Jensen A, et al.",
+        year=2023,
+        title="Predicting beta-lactam susceptibility from the genome of "
+              "Streptococcus pneumoniae and other mitis group streptococci",
+        journal="Frontiers in Microbiology 14:1120023",
+        doi="10.3389/fmicb.2023.1120023", pmid="36937294",
+        supports="an independent, non-US evaluation in which 37.5% of 88 Danish "
+                 "pneumococcal isolates carried no recognised PBP profile, "
+                 "which is why declining to predict an MIC fires often outside "
+                 "US invasive surveillance and is the correct behaviour",
     ),
     Reference(
         key="Mavroidi2004",

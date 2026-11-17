@@ -257,6 +257,104 @@ Definitions are the FDA ones the papers use: essential agreement = within ±1
 twofold dilution; category agreement = same S/I/R; major = reference S and
 prediction R; very major = reference R and prediction S.
 
+### 2.4a Why a triplet absent from the table gets no MIC: the evidence
+
+About half the validation panel gets no MIC, and the obvious way to close that
+— take the MIC of the nearest-neighbour PBP type, which is roughly what a
+"mode-MIC model for unseen types" means — **was searched for in the literature
+before being considered, and the literature says not to do it.** This section
+records that search and its outcome, so the gap is documented rather than
+quietly filled.
+
+**What was searched.** PubMed and Crossref, for a published and validated
+method predicting pneumococcal beta-lactam MICs from novel, previously
+uncharacterised or mosaic PBP transpeptidase types: the CDC work on PBP
+transpeptidase signatures (Li 2016), the CDC paper written specifically about
+new PBP types (Li 2017), the CDC surveillance applications (Metcalf 2016), the
+current production pipeline paper (Hung 2025), independent non-US validations
+(Eriksen 2023), and machine-learning MIC prediction from pneumococcal genomes
+up to 2026. The full text of Li 2017 was read, not only its abstract.
+
+**What exists.** Two models are published, both defined in Li 2016 and both
+evaluated for *new* PBP types in Li 2017:
+
+* **Mode MIC (MM).** Per PBP type, the modal measured MIC (the highest of the
+  modal values on a tie). A type absent from the training set is handled by a
+  published, explicit nearest-neighbour rule — Li 2017's Methods, verbatim: *"A
+  new PBP type that was not seen in the training dataset was approximated by a
+  training PBP type showing highest amino acid identity."* So the
+  nearest-neighbour idea is **not** an unpublished heuristic; it is part of the
+  published model, and it has been validated.
+* **Random forest (RF).** Six regression models, one per antibiotic, over the
+  amino acid at each transpeptidase-domain position, with log2 MIC as a
+  continuous response.
+
+**What the validation of the implementable one says.** Li 2017 evaluated both
+with a leave-one-**type**-out design built specifically to measure performance
+on new PBP types, over 2,528 isolates (59 serotypes, 403 MLSTs). Quoting the
+paper's own Results:
+
+> "Results from the RF models showed higher than 97% EA for all 6 antibiotics,
+> while results from the MM models showed EA lower than 90% for AMO and TAX
+> … only the CA for TAX based on the MM model predictions was lower than 90%
+> … Both RF and MM methods generated similar maj rates that were below 3%. The
+> largest difference between the two models was the vmj rates. **Results from
+> the MM model showed unacceptably high vmj rates for 4 of the 6 antibiotics,
+> with 3 of them higher than 50%.**"
+
+A very major discrepancy is a **resistant isolate predicted as susceptible** —
+the error that gets a patient the wrong drug. The paper's FDA acceptance
+criteria are essential and category agreement > 89.9 %, major ≤ 3 %, and for
+the very major rate an upper 95 % confidence limit ≤ 7.5 % and a lower limit
+≤ 1.5 %. On new PBP types the mode-MIC model fails that criterion for four of
+the six beta-lactams, three of them by more than an order of magnitude. The
+paper traces the failure to a single bad neighbour: isolates of PBP type
+13-11-16 were approximated by the closely related type whose MICs are much
+lower, and that one nearest-neighbour error destroyed the resistant calls.
+
+Li 2017's own conclusion names the other model: *"MIC prediction using the RF
+method could be an accurate alternative of phenotypic susceptibility testing
+even in the presence of previously uncharacterized PBP types."*
+
+**Why the validated method is not implemented here.** RF, the model the authors
+endorse for new types, cannot be built under this project's rules (assemblies
+in, pure Python plus BLAST+, must run inside a frozen Windows app). The CDC and
+Pathogenwatch production implementations ship the six trained models as
+serialized R objects totalling roughly 210 MB, require R with the
+`randomForest` package **pinned to one release** because the authors state the
+models were serialized with it and a newer release would change the
+predictions, and the pipeline also uses an external multiple aligner. None of
+that is portable into this tool, and a reimplementation of someone's random
+forest without their trained model is a different model with no validation.
+
+**So the position is:** the only MIC model implementable here is the one whose
+published validation, on exactly the isolates it would be used for, is a
+failure for four of six antibiotics in the most dangerous error direction. The
+module therefore reports the triplet, the per-region substitutions and
+`not determined` for the MIC, with the reason — and does not extrapolate. The
+figures above are the evidence for that decision, not a limitation of the
+implementation.
+
+**What would change this.** Any of: the CDC publishing the random forest as
+portable data rather than a serialized R object; a published MIC table
+extending beyond the 307 PBP types of the 1998–2015 US invasive collection; or
+a published, validated nearest-neighbour method with acceptable very-major
+rates for the drugs that matter. A restricted extension — nearest-neighbour
+mode MIC for **only** the antibiotics whose published very-major rate on new
+types is acceptable — is arguable from these same figures, but it is a clinical
+decision with a measured downside, it needs validation against published
+per-strain MICs for isolates carrying novel types, and it is not taken here on
+a developer's judgement.
+
+**Independent context, for whoever revisits this.** The reference table covers
+307 PBP types from US invasive isolates, 1998–2015, so novel types are commoner
+elsewhere: Eriksen 2023 found no recognised profile in 37.5 % of 88 Danish
+pneumococcal isolates, and in the largest independent evaluation of the
+production random forest (Hung 2025, 1,273 Global Pneumococcal Sequencing
+genomes with broth-dilution MICs) penicillin was the weakest of the six drugs.
+Declining to predict will therefore fire often outside US invasive
+surveillance, and that is the correct behaviour, not a defect.
+
 ### 2.5 Pilus islets, macrolide mechanism, other determinants
 
 `pilus_islets` reads PI-1 from the CDC `RRGA` probe and PI-2 from `PITB`. This
@@ -627,60 +725,81 @@ documents on 2026-11-17, not from a review:
     2017; 18:621. doi:10.1186/s12864-017-4017-7. PMID 28810827.
     — *the behaviour of the prediction for PBP types absent from the reference
     table, which is why such a triplet is reported without an MIC rather than
-    extrapolated; and the independent validation figures.*
-18. Hakenbeck R, Brückner R, Denapaite D, Maurer P. Molecular mechanisms of
+    extrapolated; and the independent validation figures. This is also the
+    paper whose leave-one-type-out results are the evidence, quoted in §2.4a,
+    for not building a nearest-neighbour mode-MIC model: on new PBP types that
+    model showed essential agreement below 90 % for amoxicillin and cefotaxime
+    and unacceptably high very-major-discrepancy rates for 4 of the 6
+    beta-lactams, and the paper's conclusion endorses the random forest, which
+    is not implementable under this project's rules.*
+18. Hung HCH, Kumar N, Dyster V, et al. GPS Pipeline: portable, scalable
+    genomic pipeline for *Streptococcus pneumoniae* surveillance from Global
+    Pneumococcal Sequencing Project. *Nature Communications* 2025; 16:8345.
+    doi:10.1038/s41467-025-64018-5. PMID 40993121.
+    — *the current production implementation of the CDC PBP MIC prediction, and
+    the largest independent evaluation of it (1,273 genomes with broth-dilution
+    MICs), in which penicillin was the weakest of the six drugs; context in
+    §2.4a for how far the prediction travels outside US surveillance.*
+19. Eriksen HB, Fuursted K, Jensen A, et al. Predicting beta-lactam
+    susceptibility from the genome of *Streptococcus pneumoniae* and other
+    mitis group streptococci. *Frontiers in Microbiology* 2023; 14:1120023.
+    doi:10.3389/fmicb.2023.1120023. PMID 36937294.
+    — *an independent, non-US evaluation reporting that 37.5 % of 88 Danish
+    pneumococcal isolates carried no recognised PBP profile, which is why
+    declining to predict fires often outside US invasive surveillance (§2.4a).*
+20. Hakenbeck R, Brückner R, Denapaite D, Maurer P. Molecular mechanisms of
     beta-lactam resistance in *Streptococcus pneumoniae*. *Future Microbiology*
     2012; 7:395–410. doi:10.2217/fmb.12.2. PMID 22393892.
     — *the SXXK, SXN and KTG/KSG active-site motif definitions and positions
     the CDC scheme adopts.*
-19. Smith AM, Klugman KP. Alterations in PBP 1A essential for high-level
+21. Smith AM, Klugman KP. Alterations in PBP 1A essential for high-level
     penicillin resistance in *Streptococcus pneumoniae*. *Antimicrobial Agents
     and Chemotherapy* 1998; 42:1329–1333. doi:10.1128/AAC.42.6.1329.
     PMID 9624469.
     — *pbp1a residue 371 and the TSQF574-577 block.*
-20. Contreras-Martel C, Job V, Di Guilmi AM, Vernet T, Dideberg O, Dessen A.
+22. Contreras-Martel C, Job V, Di Guilmi AM, Vernet T, Dideberg O, Dessen A.
     Crystal structure of penicillin-binding protein 1a (PBP1a) reveals a
     mutational hotspot implicated in beta-lactam resistance in *Streptococcus
     pneumoniae*. *Journal of Molecular Biology* 2006; 355:684–696.
     doi:10.1016/j.jmb.2005.10.030. PMID 16316661.
     — *the structural basis of the pbp1a T371 / TSQF574-577 hotspot.*
-21. Pagliero E, Chesnel L, Hopkins J, et al. Biochemical characterization of
+23. Pagliero E, Chesnel L, Hopkins J, et al. Biochemical characterization of
     *Streptococcus pneumoniae* penicillin-binding protein 2b and its
     implication in beta-lactam resistance. *Antimicrobial Agents and
     Chemotherapy* 2004; 48:1848–1855. doi:10.1128/AAC.48.5.1848-1855.2004.
     PMID 15105143.
     — *pbp2b T446A, its proximity to the S443SN motif, and its 60% reduction in
     penicillin G affinity.*
-22. Contreras-Martel C, Dahout-Gonzalez C, Martins A dos S, Kotnik M, Dessen A.
+24. Contreras-Martel C, Dahout-Gonzalez C, Martins A dos S, Kotnik M, Dessen A.
     PBP active site flexibility as the key mechanism for beta-lactam resistance
     in pneumococci. *Journal of Molecular Biology* 2009; 387:899–909.
     doi:10.1016/j.jmb.2009.02.024. PMID 19233207.
     — *the structural role of pbp2b T446 and E476.*
-23. Gordon E, Mouz N, Duée E, Dideberg O. The crystal structure of the
+25. Gordon E, Mouz N, Duée E, Dideberg O. The crystal structure of the
     penicillin-binding protein 2x from *Streptococcus pneumoniae* and its
     acyl-enzyme form: implication in drug resistance. *Journal of Molecular
     Biology* 2000; 299:477–485. doi:10.1006/jmbi.2000.3740. PMID 10860753.
     — *pbp2x T338, T550 and Q552 as the residues directly related to
     resistance.*
-24. Mouz N, Gordon E, Di Guilmi AM, et al. Identification of a structural
+26. Mouz N, Gordon E, Di Guilmi AM, et al. Identification of a structural
     determinant for resistance to beta-lactam antibiotics in Gram-positive
     bacteria. *Proceedings of the National Academy of Sciences USA* 1998;
     95:13403–13406. doi:10.1073/pnas.95.23.13403. PMID 9811812.
     — *the buried cavity beside the pbp2x catalytic serine that T338 lines.*
-25. Chesnel L, Pernot L, Lemaire D, et al. The structural modifications induced
+27. Chesnel L, Pernot L, Lemaire D, et al. The structural modifications induced
     by the M339F substitution in PBP2x from *Streptococcus pneumoniae* further
     decreases the susceptibility to beta-lactams of resistant strains. *Journal
     of Biological Chemistry* 2003; 278:44448–44456. doi:10.1074/jbc.M305948200.
     PMID 12923202.
     — *pbp2x M339F.*
-26. Smith AM, Klugman KP. Amino acid mutations essential to production of an
+28. Smith AM, Klugman KP. Amino acid mutations essential to production of an
     altered PBP 2X conferring high-level beta-lactam resistance in a clinical
     isolate of *Streptococcus pneumoniae*. *Antimicrobial Agents and
     Chemotherapy* 2005; 49:4622–4627. doi:10.1128/AAC.49.11.4622-4627.2005.
     PMID 16251304.
     — *pbp2x T338P, I371T and R384G as the substitutions whose reversion
     restores susceptibility.*
-27. Clinical and Laboratory Standards Institute. Performance standards for
+29. Clinical and Laboratory Standards Institute. Performance standards for
     antimicrobial susceptibility testing; twenty-third informational supplement
     (M100-S23). CLSI, Wayne PA, 2013.
     — *the breakpoints the predicted MIC is interpreted against, including the
@@ -689,7 +808,7 @@ documents on 2026-11-17, not from a review:
 
 **Resistance determinants and target substitutions**
 
-28. Metcalf BJ, Chochua S, Gertz RE Jr, et al. Using whole genome sequencing to
+30. Metcalf BJ, Chochua S, Gertz RE Jr, et al. Using whole genome sequencing to
     identify resistance determinants and predict antimicrobial resistance
     phenotypes for year 2015 invasive pneumococcal disease isolates recovered in
     the United States. *Clinical Microbiology and Infection* 2016;
@@ -701,12 +820,12 @@ documents on 2026-11-17, not from a review:
 
 **Pilus islets**
 
-29. Barocchi MA, Ries J, Zogaj X, et al. A pneumococcal pilus influences
+31. Barocchi MA, Ries J, Zogaj X, et al. A pneumococcal pilus influences
     virulence and host inflammatory responses. *Proceedings of the National
     Academy of Sciences USA* 2006; 103:2857–2862. doi:10.1073/pnas.0511017103.
     PMID 16481624.
     — *pilus islet 1 (the rlrA islet, rrgA–rrgC) and its clinical relevance.*
-30. Bagnoli F, Moschioni M, Donati C, et al. A second pilus type in
+32. Bagnoli F, Moschioni M, Donati C, et al. A second pilus type in
     *Streptococcus pneumoniae* is prevalent in emerging serotypes and mediates
     adhesion to host cells. *Journal of Bacteriology* 2008; 190:5480–5492.
     doi:10.1128/JB.00384-08. PMID 18515415.
@@ -714,7 +833,7 @@ documents on 2026-11-17, not from a review:
 
 **Lineage (cited for what is *not* done)**
 
-31. Gladstone RA, Lo SW, Lees JA, et al. International genomic definition of
+33. Gladstone RA, Lo SW, Lees JA, et al. International genomic definition of
     pneumococcal lineages, to contextualise disease, antibiotic resistance and
     vaccine impact. *EBioMedicine* 2019; 43:338–346.
     doi:10.1016/j.ebiom.2019.04.021. PMID 31003929.
@@ -758,16 +877,19 @@ module. That would turn four of the pair calls into definite calls with real
 evidence, and would very likely have resolved the 9V genome in §5 correctly.
 Not done because none of 9A, 18B, 35D or 7A was available to validate against.
 
-**The mode-MIC nearest-neighbour model — would roughly double MIC coverage.**
-Half the validation panel got no MIC because its triplet is not in the
-307-entry table. The published "MM" model that handles new PBP types is a
-nearest-neighbour over the 914-residue amino-acid table with a BLOSUM62-weighted
-distance, taking the mode MIC of the closest trained type; the inputs are
-`bLactam_MIC_Rscripts/newDB/train_PT_AA_table.csv` (1.1 MB) and
-`BLOSUM62.csv` (1.7 KB), both in the same CDC repository, and the computation is
-pure Python. The random-forest variant is an R object and is out of reach. Left
-out for time: it needs careful reimplementation and its own validation, and a
-wrong MIC is worse than no MIC.
+**The mode-MIC nearest-neighbour model — looked up in the literature, and NOT
+built.** This was listed here as the next addition, on the reasoning that it
+would roughly double MIC coverage. The evidence was then checked, and it does
+not support building it: the published leave-one-type-out validation of exactly
+this model on exactly these isolates shows essential agreement below 90 % for
+amoxicillin and cefotaxime and *"unacceptably high vmj rates for 4 of the 6
+antibiotics, with 3 of them higher than 50%"* — resistant isolates predicted as
+susceptible (Li 2017). The model the authors endorse for new PBP types is the
+random forest, which cannot be built under this project's rules: it ships as
+~210 MB of serialized R objects with a pinned `randomForest` release because
+the predictions depend on it. **Nothing was implemented.** The full evidence,
+with the quotations and the FDA criteria, is in §2.4a, so the decision can be
+re-examined rather than rediscovered.
 
 **Deliberately out of scope**
 
