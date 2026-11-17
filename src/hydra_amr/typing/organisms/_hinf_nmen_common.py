@@ -31,6 +31,37 @@ from ...utils import LOG, HydraError, require, revcomp, run, translate
 USER_AGENT = "hydra-amr (+https://github.com/iowa69/hydra)"
 TIMEOUT = 180
 
+# ------------------------------------------------------- how a call is worded
+#: A capsule type is named first and the lesion is stated with it, so a call
+#: reads "B (capsule gene disrupted)" and never a bare "NG" or a bare serotype
+#: letter with the real finding left for the reader to dig out of another
+#: column. Which lesion is detected is decided elsewhere and is not changed by
+#: any of this; these are only the words the call is reported in, and the
+#: lesion gene by gene stays in the note and the evidence.
+DISRUPTED = "capsule gene disrupted"
+#: A gene cut by a contig end is an assembly boundary, not a lesion. Saying so
+#: in the call keeps such a result from reading like an intact capsule, and
+#: keeps it from reading like a confirmed loss of function either.
+AT_CONTIG_END = "capsule gene at a contig end, expression not assessed"
+#: Known serotype, but the assembly cannot settle whether capsule is expressed.
+NOT_ASSESSED = "capsule expression not determined"
+
+
+def qualified_call(capsule_type: str, qualifier: str) -> str:
+    """``B`` and ``capsule gene disrupted`` -> ``B (capsule gene disrupted)``."""
+    return f"{capsule_type} ({qualifier})" if capsule_type and qualifier else capsule_type
+
+
+def capsule_type_of(call: str) -> str:
+    """The capsule type a call names, with any qualifier stripped.
+
+    ``B (capsule gene disrupted)`` -> ``B``. A call that names no type at all
+    (``NG``, ``cnl``, ``NT``, ``not determined``) comes back unchanged, so a
+    caller comparing against an expected serogroup still sees the difference.
+    """
+    return (call or "").split(" (")[0].strip()
+
+
 #: Bacterial start codons. An alternative start is translated as methionine,
 #: which is how reference protein records store it.
 START_CODONS = ("ATG", "GTG", "TTG", "ATT", "CTG")

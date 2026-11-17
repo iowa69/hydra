@@ -746,6 +746,10 @@ def _call_capsule(assembly: Path, contigs: dict[str, str], root: Path,
             "capsule-expressing arrangement and not a defect; a complete cap-b duplication "
             "without bexA truncation has not been observed")
     else:
+        # The same shape as the meningococcal module: the serotype first and the
+        # lesion stated with it, so the row cannot be read as an encapsulated
+        # isolate and the genotype is not hidden in another column.
+        call = common.qualified_call(serotype, common.DISRUPTED)
         lineage = f"capsule-deficient, genotypically serotype {serotype}"
         notes.append(
             f"a single copy of the locus with bexA absent or truncated: by the Satola et al. "

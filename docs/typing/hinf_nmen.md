@@ -491,7 +491,7 @@ GitHub-only installs, and the latter has no licence statement.
 | Accession | Strain | Expected | Source of expectation | Hydra returned |
 | --- | --- | --- | --- | --- |
 | GCF_000009105.1 | Z2491 | A | Parkhill et al. 2000 *Nature*, serogroup A in the title | **A**, `A:P1.7,13-1:F1-5:ST-4(cc4)`, BAST-639 |
-| GCF_000008805.1 | MC58 | B | Tettelin et al. 2000 *Science*; BioSample SAMN02603997 `serogroup=B` | **NG, genogroup B** - *csb* truncated; see the note below |
+| GCF_000008805.1 | MC58 | B | Tettelin et al. 2000 *Science*; BioSample SAMN02603997 `serogroup=B` | **B (capsule gene disrupted)** - *csb* truncated; see the note below |
 | GCF_000191445.1 | H44/76 | B, P1.7,16, ST-32, cc32 | the reference serogroup B strain; published fine type B:P1.7,16:ST-32(cc32) | **B**, `B:P1.7,16:F3-3:ST-32(cc32)`, BAST-642 (fHbp 1, NHBA 3) |
 | GCF_000191525.1 | NZ-05/33 | B, P1.7-2,4, cc41/44 | the New Zealand epidemic strain | **B**, `B:P1.7-2,4:F1-5:ST-42(cc41/44)`, BAST-223 |
 | GCF_000191465.1 | M01-240149 | B | serogroup B disease isolate | **B**, `B:P1.7-2,4:F1-5`, ST-41, cc41/44 |
@@ -502,12 +502,33 @@ GitHub-only installs, and the latter has no licence statement.
 | GCF_000026965.1 | 8013 | C | Rusniok et al. 2009 | **C**, ST-177, ST-18 complex |
 | GCF_000083565.1 | alpha14 | cnl | Schoen et al. 2008; ENA sample `serotype=cnl` | **cnl** |
 
-10 of 11 serogroup calls match the published serogroup outright, covering A, B, C
-and the capsule-null case; the eleventh, MC58, is reported as genogroup B with a
-truncated polymerase.
+All 11 calls name the published serogroup, covering A, B, C and the capsule-null
+case. MC58 names it with its lesion attached — `B (capsule gene disrupted)` —
+because the gene really is truncated in the deposited sequence; see the note
+below.
 
-**The MC58 disagreement, investigated in the sequence.** MC58 is published as
-serogroup B, and this module reports `NG` with genogroup B because *csb*
+**How a disrupted capsule is worded.** The serogroup comes first and the lesion
+is stated with it, so the call reads `B (capsule gene disrupted)` rather than a
+bare `NG` with the genogroup left in another column for the reader to find. Which
+lesion is detected is unchanged, and the evidence and the caveats are unchanged:
+the gene-by-gene faults stay in the note and in the evidence, and the note still
+says that the laboratory will report the isolate as non-groupable, that the
+lesion can revert, and that the genogroup and the lesion belong together. A
+capsule gene cut by a contig end is a third, separate wording —
+`B (capsule gene at a contig end, expression not assessed)` — because an
+assembly boundary is neither an intact capsule nor a lesion. The fine type keeps
+the standard designation, whose first field is the serological result and so is
+`NG` for an isolate that cannot express its locus; the reason travels with it in
+the `serogroup_field` evidence, pointing at the `cps` call.
+
+The *H. influenzae* module uses the same shape: a single-copy locus with *bexA*
+absent or truncated is `b (capsule gene disrupted)`, not a bare `b`, so a
+capsule-deficient isolate cannot be read as an encapsulated one. The normal
+virulent Hib arrangement — a duplicated locus with one *bexA* truncated — is
+still reported as plain `b`, and the test that insists on that is unchanged.
+
+**The MC58 lesion, investigated in the sequence.** MC58 is published as
+serogroup B, and this module reports a disrupted capsule because *csb*
 (the polysialyltransferase, formerly *siaD*) aligns over only 45% of the
 reference product. That is not a threshold artefact: RefSeq's own annotation of
 the same assembly annotates the polysialyltransferase CDS at
@@ -517,11 +538,14 @@ carrying the poly-cytidine tract at nucleotide 89 whose slipped-strand mispairin
 switches serogroup B capsule on and off, and MC58 is the laboratory background in
 which that phase variation was characterised, so a frameshifted *csb* in a stock
 published as serogroup B is the expected finding rather than a surprising one.
-The call is therefore left as it stands: genogroup B, non-groupable, with the
-lesion named. The validation test accepts `NG` when the genogroup is right, for
-exactly this reason - the published serogroup is a serological result on a
-particular stock, and an assembly can carry a reversible lesion that stock did
-not express.
+The call is therefore left as it stands, and is now worded as the owner asked:
+`B (capsule gene disrupted)` — the serogroup, which is what the published record
+says, and the lesion, which is what the sequence says. The validation test is
+stricter than it was: it no longer accepts a bare `NG` with a matching genogroup
+hidden in another column, but requires the call itself to name the published
+serogroup. The published serogroup is a serological result on a particular stock,
+and an assembly can carry a reversible lesion that stock did not express, which
+is exactly why both halves have to be in the call.
 Two independent cross-checks landed exactly: H44/76 returns the published
 `P1.7,16` with ST-32/cc32, and NZ-05/33 returns the published `P1.7-2,4` with
 cc41/44 — `7-2,4` is also the PorA of NZ98/254, the Bexsero outer-membrane
@@ -541,11 +565,88 @@ than tuned away:
    peptide is a substring of the translated gene. Matching the longest contained
    definition fixed it.
 
-**Serogroups not covered by the validation set.** W, X, Y, E and Z are
-implemented but no genome with a published serogroup for them was validated in
-the time available, so those calls are implemented and exercised by the unit
-tests but not confirmed against a published type. They should be treated as
-provisional until a W, X and Y genome is run.
+### 4.4 *N. meningitidis* serogroups W, X, Y, E and Z
+
+These five were implemented and unit-tested but had never been run against a
+genome whose serogroup is published. They have now been. Every expectation below
+comes from a paper, a reference-collection record, or both; where the record is
+an NCBI BioSample the field is named, and where a paper states the method the
+method is quoted.
+
+| Accession | Strain | Expected | Source of expectation | Hydra returned |
+| --- | --- | --- | --- | --- |
+| GCF_000800275.1 | M7124 | W | BioSample SAMN03020254 `serogroup=W`; BioProject PRJNA260327 "serogroup W ST-11 Hajj reference strain"; Mustapha et al. 2016 *Genome Biol Evol* 8:2065 | **W**, `W:P1.5,2:F1-1:ST-11(cc11)` |
+| GCF_001697425.1 | M07149 | W | BioSample SAMN04883361 `serogroup=W`; Retchless et al. 2016 *mSphere* 1:e00201-16, Methods: "the serogroup phenotype was confirmed using slide agglutination" | **W**, `W:P1.5,2:F1-1:ST-11(cc11)` |
+| GCF_009664695.1 | AUSMDU00010537 | W | BioSample SAMN13191640, titled "*Neisseria meningitidis* ST11 Serogroup W", `serotype=W`; Baines et al. 2020 *Microb Genom* 6:e000471 Table 1 | **W**, ST-11, cc11 |
+| GCF_015828725.1 | N.971/92 | X | Cassiolato et al. 2023 *Int Microbiol* 26:611, "six *N. meningitidis* serogroup X (MenX) isolates"; BioSample SAMN13841843 `Serogroup=X`; BioProject PRJNA601116 | **X (capsule gene disrupted)**, genogroup X, ST-15458 — see the note below |
+| GCF_008330885.1 | 95-134 | Y | Stenmark et al. 2020 *Sci Rep* 10:3644 Table 1, "the single molecule real-time sequenced *N. meningitidis* serogroup Y isolates (n = 8)" | **Y**, `Y:P1.5-2,10-1:F4-1:ST-23(cc23)` |
+| GCF_009664675.1 | AUSMDU00005726 | Y | BioSample SAMN13191641, titled "*Neisseria meningitidis* ST1655 Serogroup Y", `serotype=Y`; Baines et al. 2020 Table 1 | **Y**, `Y:P1.5-1,10-1:F4-1:ST-1655(cc23)` |
+| GCF_016007825.1 | M47305 | E | Topaz et al. 2020 *Microb Genom* 6:mgen000477 supplementary Table S1, `Serogroup=E` (Burkina Faso 2017, ST-9945) | **E**, `E:P1.21,16-14:F3-6:ST-9945` |
+| GCA_037365905.1 | M38141 | Z | Whaley et al. 2022 *Front Microbiol* 13:815044 supplementary Table 1, "slide agglutination serogrouping" = Z, genogroup Z, all capsule genes intact — the only Z among 1514 isolates | **Z**, `Z:P1.5-1,10-4:F5-1:ST-4983(cc103)` |
+
+8 of 8, and the ten rows of section 4.3 are unchanged, so the whole set is
+18 of 18. None of the five is provisional any longer.
+
+**The defect this found: every serogroup W isolate was reported as serogroup Y.**
+All three W genomes came back `Y` on the first run. The cause was not a
+threshold. B, C, W and Y share the whole sialic-acid pathway and are told apart
+by one gene, and *csw* (W) and *csy* (Y) are 99% identical at the amino-acid
+level, so both clear any identity cut-off a translated search can set: in either
+genome both genes are "present", both serogroups score four of four region A
+genes, and both score one serogroup-specific gene. The ranking then fell through
+to its last sort key, which was the serogroup's *name*, reverse-sorted — so "Y"
+beat "W", every time, for every isolate.
+
+The evidence that separates them had been collected and then thrown away. The
+isolate's own sequence is unambiguous:
+
+| | *csw* (W) | *csy* (Y) |
+| --- | --- | --- |
+| M7124, published W | **100.00%** | 99.04% |
+| AUSMDU00010537, published W | **100.00%** | 99.04% |
+| 95-134, published Y | 98.94% | **100.00%** |
+| AUSMDU00005726, published Y | 98.94% | **100.00%** |
+
+`rank_serogroups()` now ranks on (serogroup-specific genes present, region A
+genes present, how well the isolate matches the genes found only in that
+serogroup), and the serogroup's name decides nothing. The two scores go into the
+call's evidence as `serogroup_discrimination`, so a reader sees why W rather than
+Y. When the two are within `CPS_DISCRIMINATION_MARGIN` (0.25 points of
+identity × coverage) the row says the assembly cannot separate them and asks for
+serology or a serogroup-specific PCR — the margin has to be well under one point
+because one point is all that separates a real W from a real Y. No threshold was
+changed and no gene detection was changed; A, B, C and the capsule-null case all
+return exactly what they returned before.
+
+**The *csxA* stop in N.971/92, reported not tuned away.** The serogroup is right,
+and the module additionally reports that *csxA* carries one internal stop codon,
+so the call is `X (capsule gene disrupted)` rather than a plain `X`. The gene is
+100% covered at 97.9% identity on a 2.19 Mb, contig-level draft, and the isolate
+is a cerebrospinal-fluid isolate published as serogroup X, so the likeliest
+explanation is a sequencing or assembly error in the draft rather than a genome
+that cannot make capsule. It is left exactly as found: the row names the gene,
+the lesion and the caveat that such lesions revert, which is the information a
+reader needs in order to disbelieve it. Suppressing it on a guess about assembly
+quality would be the worse error.
+
+**What could not be validated, and what that costs.** Nothing is provisional,
+but two rows are weaker than the rest and the docs should not pretend otherwise:
+
+* **Serogroup E and serogroup Z have no closed genome.** There is no
+  complete/closed assembly of either anywhere in GenBank or RefSeq, so both rows
+  are contig-level. No structured serogroup field in NCBI, ENA or BV-BRC ever
+  equals `E`, `29E` or `Z`; the expectations had to come from the supplementary
+  tables of papers.
+* **The serogroup Z row is GenBank-only (GCA).** The only RefSeq candidates for
+  Z are labelled from PubMLST's `genogroup`/`capsule_group` field, which is
+  derived from the capsule locus — using one to validate a capsule-locus caller
+  would be circular. `GCA_037365905.1` is used instead because Whaley et al.
+  state its serogroup from *slide agglutination*, which is independent of the
+  sequence.
+* **Serogroup L and serogroup H** are implemented and remain unvalidated: no
+  public assembly with a published L or H serogroup was found. They keep the
+  provisional status this section used to give all five, and their
+  `SEROGROUP_MEANING` entries are not claimed to be validated.
 
 ---
 

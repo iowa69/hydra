@@ -305,6 +305,137 @@ def test_finetype_string_follows_the_published_nomenclature():
     assert result.loci_found == 3
 
 
+def test_an_unvalidated_serogroup_is_marked_provisional_in_its_own_caveat():
+    """L and H are implemented but were never confirmed against a published type.
+
+    Eight serogroups have been: A, B and C and the capsule-null locus in
+    section 4.3 of the docs, then W, X, Y, E and Z in 4.4. L and H have not,
+    for want of a public assembly with a published L or H serogroup, and a call
+    of either has to say so rather than look as solid as the other eight.
+    """
+    assert nm.VALIDATED_SEROGROUPS == {"A", "B", "C", "W", "X", "Y", "E", "Z"}
+    # Every serogroup the module can call is either validated or named here as
+    # not being, so a new one cannot be added and quietly inherit the status.
+    unvalidated = set(nm.SEROGROUP_ESSENTIAL) - nm.VALIDATED_SEROGROUPS
+    assert unvalidated == {"L", "H"}
+    # The validated eight are exactly the ones whose clinical meaning is given.
+    assert set(nm.SEROGROUP_MEANING) == nm.VALIDATED_SEROGROUPS
+
+
+def test_w_and_y_are_separated_on_the_sequence_not_on_the_alphabet():
+    """The defect validation found: every serogroup W isolate was called Y.
+
+    B, C, W and Y share the whole sialic-acid pathway and are told apart by one
+    gene. csw (W) and csy (Y) are 99% identical, so both clear the module's
+    identity threshold in either genome and both serogroups score the same
+    number of region A genes and the same number of serogroup-specific ones.
+    The old ranking then fell through to the serogroup's *name*, reverse-sorted,
+    so "Y" beat "W" every time.
+
+    The numbers below are the real ones, measured on M7124 and 95-134: the
+    isolate's own match to each gene does say which serogroup it is.
+    """
+    shared = {"cssA": 100.0, "cssB": 100.0, "cssC": 100.0}
+    present = {"csw", "csy", "cssA", "cssB", "cssC"}
+
+    a_w_genome = nm.rank_serogroups(present, {"csw": 100.00, "csy": 99.04, **shared})
+    assert a_w_genome[0][3] == "W", a_w_genome[:2]
+    assert a_w_genome[1][3] == "Y"
+
+    a_y_genome = nm.rank_serogroups(present, {"csw": 98.94, "csy": 100.00, **shared})
+    assert a_y_genome[0][3] == "Y", a_y_genome[:2]
+    assert a_y_genome[1][3] == "W"
+
+    # The two counts really are equal, so nothing but the sequence can decide.
+    assert a_w_genome[0][:2] == a_w_genome[1][:2] == (1, 4)
+
+    # And the margin is about one point, which is why the "cannot separate
+    # them" threshold has to be well under that.
+    assert 0 < nm.CPS_DISCRIMINATION_MARGIN < 1.0
+
+
+def test_the_serogroup_ranking_still_prefers_more_evidence_over_a_better_match():
+    """A single excellent match never outranks a complete gene set."""
+    # Serogroup X has all three of its own genes, at a mediocre identity; B has
+    # only the shared pathway, perfectly. X must win: it is the one with
+    # serogroup-specific evidence.
+    scored = nm.rank_serogroups(
+        {"csxA", "csxB", "csxC", "cssA", "cssB", "cssC"},
+        {"csxA": 85.0, "csxB": 85.0, "csxC": 85.0,
+         "cssA": 100.0, "cssB": 100.0, "cssC": 100.0})
+    assert scored[0][3] == "X"
+    assert scored[0][0] == 3, "all three X genes are serogroup-specific"
+    # B, C, W and Y have three of four region A genes and none of their own.
+    others = {row[3]: row for row in scored[1:]}
+    for group in ("B", "C", "W", "Y"):
+        assert others[group][0] == 0 and others[group][1] == 3, group
+
+
+def test_a_serogroup_with_no_region_a_gene_is_not_ranked_at_all():
+    assert nm.rank_serogroups(set(), {}) == []
+    only_transport = nm.rank_serogroups({"ctrA", "ctrB", "tex"}, {"ctrA": 100.0})
+    assert only_transport == [], "the transporter names no serogroup"
+
+
+def test_a_disrupted_capsule_states_the_serogroup_first_and_the_lesion_with_it():
+    """The owner's decision: "B (capsule gene disrupted)", never a bare "NG"."""
+    assert nm.qualified_call("B", nm.DISRUPTED) == "B (capsule gene disrupted)"
+    # The serogroup is recoverable from the call, so a reader and a caller both
+    # get the group without having to look in another column.
+    for group in nm.SEROGROUP_MEANING:
+        for qualifier in (nm.DISRUPTED, nm.AT_CONTIG_END):
+            assert nm.serogroup_of(nm.qualified_call(group, qualifier)) == group
+    # A call that names no serogroup is left exactly as it is.
+    for call in ("NG", "cnl", "not determined"):
+        assert nm.serogroup_of(call) == call
+    # The two qualifiers must not read alike: one is a lesion, the other is an
+    # assembly boundary and explicitly not evidence of one.
+    assert nm.DISRUPTED != nm.AT_CONTIG_END
+    assert "not assessed" in nm.AT_CONTIG_END and "disrupted" in nm.DISRUPTED
+
+
+def test_hinfluenzae_uses_the_same_wording_as_the_meningococcus():
+    from hydra_amr.typing.organisms import _hinf_nmen_common as common
+
+    assert common.qualified_call("b", common.DISRUPTED) == "b (capsule gene disrupted)"
+    assert common.capsule_type_of("b (capsule gene disrupted)") == "b"
+    assert nm.DISRUPTED is common.DISRUPTED
+
+
+def test_finetype_keeps_the_standard_NG_field_but_says_why():
+    """The designation's first field is serological, so a disrupted B is NG there.
+
+    The reason has to travel with it, or the reader meets the bare NG the
+    serogroup call was changed to stop showing.
+    """
+    from hydra_amr.records import TypingResult
+
+    capsule = TypingResult(scheme="cps", call=nm.qualified_call("B", nm.DISRUPTED),
+                           lineage="serogroup B, capsule gene disrupted",
+                           alleles={"genogroup": "B"})
+    mlst = TypingResult(scheme="mlst", call="not determined")
+    peptides = {"PorA_VR1": ("7", ""), "PorA_VR2": ("16", ""), "FetA_VR": ("F3-3", "")}
+    result = nm._call_finetype(capsule, peptides, mlst)
+    assert result.call == "NG:P1.7,16:F3-3"
+    basis = result.alleles["serogroup_field"]
+    assert "serogroup B" in basis and "lesion" in basis
+    assert "B (capsule gene disrupted)" in basis
+
+
+def test_finetype_keeps_the_serogroup_when_only_a_contig_end_was_in_the_way():
+    """A gene cut by a contig end is not evidence of non-groupability."""
+    from hydra_amr.records import TypingResult
+
+    capsule = TypingResult(scheme="cps", call=nm.qualified_call("W", nm.AT_CONTIG_END),
+                           lineage="serogroup W, capsule gene cut by a contig end",
+                           alleles={"genogroup": "W"})
+    mlst = TypingResult(scheme="mlst", call="not determined")
+    peptides = {"PorA_VR1": ("5", ""), "PorA_VR2": ("2", ""), "FetA_VR": ("F1-1", "")}
+    result = nm._call_finetype(capsule, peptides, mlst)
+    assert result.call == "W:P1.5,2:F1-1"
+    assert "could not be assessed" in result.alleles["serogroup_field"]
+
+
 def test_finetype_marks_a_missing_region_rather_than_inventing_one():
     from hydra_amr.records import TypingResult
 
@@ -363,6 +494,41 @@ NMEN_VALIDATION = (
     ("GCF_000009105.1", "Z2491", "A", "A", "Parkhill 2000 Nature: serogroup A"),
     ("GCF_000008805.1", "MC58", "B", "B", "Tettelin 2000 Science; BioSample "
                                           "SAMN02603997 serogroup=B"),
+    # W, X, Y, E and Z were implemented and unit-tested but had never been run
+    # against a genome whose serogroup is published. These are those genomes.
+    # Every row's serogroup is stated in a paper, a reference-collection record,
+    # or both; where the record is a BioSample the field is named.
+    ("GCF_000800275.1", "M7124", "W", "W",
+     "the W ST-11 Hajj reference strain (Saudi Arabia, 2000 epidemic): BioSample "
+     "SAMN03020254 serogroup=W, BioProject PRJNA260327 'serogroup W ST-11 Hajj "
+     "reference strain', and Mustapha 2016 Genome Biol Evol 8:2065 Methods"),
+    ("GCF_001697425.1", "M07149", "W", "W",
+     "BioSample SAMN04883361 serogroup=W; Retchless 2016 mSphere 1:e00201-16, whose "
+     "Methods state 'the serogroup phenotype was confirmed using slide agglutination' "
+     "- the one row here that records the serology method"),
+    ("GCF_009664695.1", "AUSMDU00010537", "W", "W",
+     "BioSample SAMN13191640, titled 'Neisseria meningitidis ST11 Serogroup W', "
+     "serotype=W; Baines 2020 Microb Genom 6:e000471 Table 1"),
+    ("GCF_015828725.1", "N.971/92", "X", "X",
+     "Cassiolato 2023 Int Microbiol 26:611, 'six N. meningitidis serogroup X (MenX) "
+     "isolates' (Tables 1-2); BioSample SAMN13841843 Serogroup=X, BioProject "
+     "PRJNA601116 'serogroup X strains isolated in Brazil'"),
+    ("GCF_008330885.1", "95-134", "Y", "Y",
+     "Stenmark 2020 Sci Rep 10:3644 Table 1, 'genome metrics of the single molecule "
+     "real-time sequenced N. meningitidis serogroup Y isolates (n = 8)'"),
+    ("GCF_009664675.1", "AUSMDU00005726", "Y", "Y",
+     "BioSample SAMN13191641, titled 'Neisseria meningitidis ST1655 Serogroup Y', "
+     "serotype=Y; Baines 2020 Microb Genom 6:e000471 Table 1"),
+    ("GCF_016007825.1", "M47305", "E", "E",
+     "Topaz 2020 Microb Genom 6:mgen000477 supplementary Table S1, Serogroup=E "
+     "(Burkina Faso, 2017, ST-9945). Contig-level: no closed genome of serogroup E "
+     "exists in GenBank or RefSeq"),
+    ("GCA_037365905.1", "M38141", "Z", "Z",
+     "Whaley 2022 Front Microbiol 13:815044 supplementary Table 1, 'slide "
+     "agglutination serogrouping' = Z with genogroup Z and all capsule genes intact "
+     "- the only Z among 1514 isolates. GCA, not GCF, and contig-level: no closed "
+     "genome of serogroup Z exists, and the only RefSeq candidates are labelled from "
+     "the capsule locus itself, which would make the validation circular"),
 )
 
 _DOWNLOAD = ("https://api.ncbi.nlm.nih.gov/datasets/v2alpha/genome/accession/"
@@ -449,13 +615,17 @@ def test_validate_nmeningitidis_serogroup(accession, strain, expected, genogroup
     genome = _genome(accession, cache)
     results = {result.scheme: result for result in nm.run(genome, db_dir, threads=2)}
     capsule = results["cps"]
-    # A non-groupable call is acceptable only if the genogroup is still right:
-    # the published serogroup is a serological result and an assembly can show a
-    # lesion the serology of the sequenced stock did not have.
-    assert capsule.call == expected or (
-        capsule.call == "NG" and capsule.alleles.get("genogroup") == genogroup), (
+    # The call names the serogroup first and states any lesion beside it
+    # ("B (capsule gene disrupted)"), so the published serogroup has to be in
+    # the call itself. A bare "NG" with the genogroup hidden in another column
+    # no longer passes, which makes this assertion stricter than it was.
+    assert nm.serogroup_of(capsule.call) == expected, (
         f"{strain} ({accession}): expected {expected} from {source}, got "
         f"{capsule.call} (genogroup {capsule.alleles.get('genogroup')}) - {capsule.note}")
+    if capsule.alleles.get("genogroup"):
+        assert capsule.alleles["genogroup"] == genogroup, (
+            f"{strain} ({accession}): genogroup {capsule.alleles['genogroup']}, "
+            f"expected {genogroup}")
     assert capsule.alleles and capsule.note
     shutil.rmtree(cache, ignore_errors=True)
 

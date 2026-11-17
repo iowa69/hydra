@@ -138,6 +138,28 @@ SEROGROUP_UNIQUE: dict[str, str] = {
     "cslA": "L", "cslB": "L", "cslC": "L",
     "cszC": "Z", "cszD": "Z", "cshC": "H", "cshD": "H",
 }
+#: Serogroups confirmed against a genome whose serogroup is published; see
+#: docs/typing/hinf_nmen.md sections 4.3 and 4.4, where every row's accession,
+#: expectation, source and result is tabulated. A, B, C and the capsule-null
+#: locus came first; W, X, Y, E and Z were validated afterwards, and finding
+#: that every W isolate had been reported as Y is what that validation was for.
+#:
+#: L and H are implemented from the same nomenclature paper but no public
+#: assembly with a published L or H serogroup could be found, so a call of
+#: either is reported as provisional in its own caveat rather than silently
+#: presented as being as well established as the other eight.
+VALIDATED_SEROGROUPS = frozenset({"A", "B", "C", "W", "X", "Y", "E", "Z"})
+
+#: Two serogroups whose own genes match the isolate this closely cannot be told
+#: apart from the alignment, and the call says so instead of picking one.
+#:
+#: The number is in "identity x coverage" points out of 100. It has to be small:
+#: the serogroups that need separating at all are separated by one gene, and csw
+#: (W) and csy (Y) are 99% identical, so the real margin between a W isolate's
+#: match to csw (100.00) and to csy (99.04) is about one point. Anything larger
+#: would refuse every W and Y call; anything at zero would call a genuine tie.
+CPS_DISCRIMINATION_MARGIN = 0.25
+
 #: Minimum identity and coverage for a capsule gene to count as present.
 CPS_IDENTITY = 80.0
 CPS_COVERAGE = 80.0
@@ -146,6 +168,14 @@ CPS_INTACT_COVERAGE = 95.0
 #: A gap this large inside an otherwise good alignment is an insertion, which in
 #: the capsule locus is usually an insertion sequence.
 CPS_INSERTION_BASES = 200
+
+#: The wording of a capsule call is shared with the *H. influenzae* module, so
+#: a disrupted capsule reads the same way in both: see
+#: :func:`._hinf_nmen_common.qualified_call`.
+DISRUPTED = common.DISRUPTED
+AT_CONTIG_END = common.AT_CONTIG_END
+qualified_call = common.qualified_call
+serogroup_of = common.capsule_type_of
 
 #: Serogroup meaning at the bedside and for the vaccine question.
 SEROGROUP_MEANING = {
@@ -172,6 +202,48 @@ SEROGROUP_MEANING = {
     "Z": "serogroup Z; rare, mainly carriage and occasional disease in the "
          "immunocompromised; not covered by any licensed vaccine",
 }
+
+def rank_serogroups(present: set[str],
+                    strength: dict[str, float]) -> list[tuple[int, int, float, str]]:
+    """Score every serogroup against the capsule genes found, best first.
+
+    Each serogroup scores on three things, in this order: how many of its own
+    region A genes are serogroup-specific and present, how many of its region A
+    genes are present at all, and how well the isolate's sequence matches the
+    genes found only in it.
+
+    The third is not a refinement, it is what makes W and Y separable at all.
+    B, C, W and Y share the whole sialic-acid pathway and are told apart by one
+    gene; csw and csy are 99% identical, so both clear any identity threshold a
+    protein search can set and both serogroups come out with the same two
+    counts. The isolate's own sequence still says which it is -- in a serogroup
+    W genome csw matches its reference at 100.00% and csy at 99.04%, and the
+    other way round in a Y genome -- and that is what decides it here.
+
+    Before this, the tie fell through to the serogroup's *name*, reverse-sorted,
+    so "Y" beat "W" and every serogroup W isolate was reported as serogroup Y.
+    The evidence that distinguishes them had been collected and then thrown
+    away. Nothing about which genes are detected has changed; only what the
+    ranking is allowed to decide on.
+
+    *strength* maps a gene to ``identity x coverage / 100`` for its best hit.
+    Rows are ``(unique, region_A, strength, serogroup)``. Serogroups that tie on
+    all three keep their order in :data:`SEROGROUP_ESSENTIAL`, because at that
+    point there is nothing to choose between them and the caller says so rather
+    than letting an alphabet decide.
+    """
+    scored: list[tuple[int, int, float, str]] = []
+    for group, essential in SEROGROUP_ESSENTIAL.items():
+        region_a = sum(1 for gene in essential if gene in present)
+        if not region_a:
+            continue
+        own = [gene for gene in essential
+               if gene in present and SEROGROUP_UNIQUE.get(gene) == group]
+        best = max((strength.get(gene, 0.0) for gene in own), default=0.0)
+        scored.append((len(own), region_a, best, group))
+    scored.sort(key=lambda row: row[:3], reverse=True)
+    return scored
+
 
 # ------------------------------------------------------------- bibliography
 REFERENCES: tuple[Reference, ...] = (
@@ -701,16 +773,12 @@ def _call_capsule(assembly: Path, contigs: dict[str, str], root: Path, work: Pat
                                        * current["hit"].identity_pct):
             found[gene] = record
     present = set(found)
+    strength = {gene: record["hit"].identity_pct * record["hit"].coverage_pct / 100.0
+                for gene, record in found.items()}
 
-    # Score each serogroup on its own region A set plus the shared transporter.
-    scored: list[tuple[int, int, str]] = []
-    for group, essential in SEROGROUP_ESSENTIAL.items():
-        region_a = sum(1 for gene in essential if gene in present)
-        unique = sum(1 for gene in essential
-                     if gene in present and SEROGROUP_UNIQUE.get(gene) == group)
-        if region_a:
-            scored.append((unique, region_a, group))
-    scored.sort(reverse=True)
+    # Score each serogroup on its own region A set, then on how well the
+    # isolate matches the genes found only in it: see rank_serogroups().
+    scored = rank_serogroups(present, strength)
 
     alleles: dict[str, str] = {}
     transport = {gene: found.get(gene) for gene in TRANSPORT_ESSENTIAL}
@@ -752,17 +820,42 @@ def _call_capsule(assembly: Path, contigs: dict[str, str], root: Path, work: Pat
                  "what a commensal Neisseria looks like against a meningococcal capsule "
                  "reference")
 
-    unique, region_a, group = scored[0]
+    unique, region_a, best_strength, group = scored[0]
     essential = SEROGROUP_ESSENTIAL[group]
     for gene in essential + SEROGROUP_ACCESSORY.get(group, ()):
         alleles[gene] = _cps_evidence(found.get(gene))
     rivals = [f"{other} ({count}/{len(SEROGROUP_ESSENTIAL[other])} region A genes)"
-              for _u, count, other in scored[1:4] if count]
+              for _u, count, _s, other in scored[1:4] if count]
     alleles["genogroup"] = group
     alleles["region_A_support"] = (f"{region_a}/{len(essential)} genes of serogroup {group}, "
                                    f"{unique} of them found only in {group}")
     if rivals:
         alleles["other_serogroups_matched"] = ", ".join(rivals)
+
+    # Which serogroup it is, when more than one fits the genes found. For B, C,
+    # W and Y this is the whole of the call: they differ by one gene and csw and
+    # csy are 99% identical, so the counts above cannot separate them and the
+    # isolate's match to each one's own gene has to.
+    contested = [row for row in scored[1:] if row[0] == unique and row[1] == region_a]
+    if contested:
+        margin = best_strength - contested[0][2]
+        alleles["serogroup_discrimination"] = "; ".join(
+            [f"{group} {best_strength:.2f}"] +
+            [f"{other} {value:.2f}" for _u, _c, value, other in contested[:3]]
+        ) + (" (identity x coverage of the best match to each serogroup's own "
+             "region A gene, out of 100)")
+        if margin < CPS_DISCRIMINATION_MARGIN:
+            undecided = ", ".join(other for _u, _c, _s, other in contested[:3])
+            caveat = (f"serogroup {group} and {undecided} fit the genes found equally "
+                      f"well (within {CPS_DISCRIMINATION_MARGIN} of each other), so this "
+                      f"assembly cannot separate them; {group} is reported as the best "
+                      f"match but confirm it serologically or by a serogroup-specific PCR")
+            alleles["serogroup_discrimination"] += ". " + caveat
+            faults_ambiguous = caveat
+        else:
+            faults_ambiguous = ""
+    else:
+        faults_ambiguous = ""
 
     faults: list[str] = []
     for gene in essential + TRANSPORT_ESSENTIAL:
@@ -786,6 +879,24 @@ def _call_capsule(assembly: Path, contigs: dict[str, str], root: Path, work: Pat
             faults.append(f"{gene} runs into a contig end, so it could not be read in full")
 
     meaning = SEROGROUP_MEANING.get(group, f"serogroup {group}")
+    # A serogroup the alignment could not separate from a rival is a caveat on
+    # every outcome below, not only on the clean one. So is a serogroup that has
+    # never been checked against a genome whose serogroup is published.
+    caveats = [faults_ambiguous] if faults_ambiguous else []
+    if group not in VALIDATED_SEROGROUPS:
+        provisional = (
+            f"serogroup {group} is PROVISIONAL: it is implemented from the capsule locus "
+            f"nomenclature paper and covered by the unit tests, but no public assembly "
+            f"with a published serogroup {group} could be found, so this call has never "
+            f"been confirmed against a published type. Confirm it serologically before "
+            f"reporting it")
+        caveats.append(provisional)
+        alleles["validation_status"] = provisional
+    else:
+        alleles["validation_status"] = (
+            f"serogroup {group} is validated against genomes whose serogroup is published; "
+            f"see docs/typing/hinf_nmen.md")
+    ambiguity = "".join(f". {text}" for text in caveats)
     if not faults:
         return TypingResult(
             scheme="cps", call=group, lineage=f"serogroup {group}; {meaning}",
@@ -793,21 +904,28 @@ def _call_capsule(assembly: Path, contigs: dict[str, str], root: Path, work: Pat
             loci_total=len(essential) + len(TRANSPORT_ESSENTIAL),
             note=f"every gene serogroup {group} needs is present and intact in regions A, "
                  f"B and C, so the isolate is expected to express a serogroup {group} "
-                 f"capsule and to agglutinate with {group} antiserum")
+                 f"capsule and to agglutinate with {group} antiserum" + ambiguity)
     contig_only = all("runs into a contig end" in fault or "could not be read" in fault
                       for fault in faults)
     if contig_only:
+        alleles["capsule_integrity"] = (
+            "a capsule gene runs off the end of a contig, so loss of function could not be "
+            "assessed; this is an assembly boundary and not evidence of disruption")
         return TypingResult(
-            scheme="cps", call=group, lineage=f"serogroup {group}; {meaning}",
+            scheme="cps", call=qualified_call(group, AT_CONTIG_END),
+            lineage=f"serogroup {group}, capsule gene cut by a contig end; {meaning}",
             alleles=alleles, loci_found=len(present),
             loci_total=len(essential) + len(TRANSPORT_ESSENTIAL),
             note=f"genogroup {group}. " + "; ".join(faults) +
                  ". The only faults found are at contig boundaries, which is an assembly "
                  "limitation rather than evidence of a disrupted gene, so the serogroup is "
-                 "reported as determined; expression cannot be confirmed from this assembly")
+                 "reported as determined; expression cannot be confirmed from this "
+                 "assembly" + ambiguity)
+    alleles["capsule_integrity"] = "; ".join(faults)
     return TypingResult(
-        scheme="cps", call="NG",
-        lineage=f"genogroup {group}, serologically non-groupable",
+        scheme="cps", call=qualified_call(group, DISRUPTED),
+        lineage=f"serogroup {group}, capsule gene disrupted: serologically non-groupable "
+                f"(NG) while the genogroup is {group}",
         alleles=alleles, loci_found=len(present),
         loci_total=len(essential) + len(TRANSPORT_ESSENTIAL),
         note=f"the isolate carries the serogroup {group} capsule locus but cannot express "
@@ -816,7 +934,7 @@ def _call_capsule(assembly: Path, contigs: dict[str, str], root: Path, work: Pat
              f"directions: the laboratory will report it as non-groupable while the "
              f"genogroup is {group}, and the lesion can revert, since an insertion-sequence "
              f"or slipped-strand switch is reversible. Report the genogroup and the lesion, "
-             f"not the serogroup alone. {meaning}")
+             f"not the serogroup alone. {meaning}" + ambiguity)
 
 
 def _cps_evidence(record: dict | None) -> str:
@@ -961,8 +1079,29 @@ def _call_finetype(capsule: TypingResult, peptides: dict[str, tuple[str, str]],
     vr1, vr1_note = peptides.get("PorA_VR1", ("", "not determined"))
     vr2, vr2_note = peptides.get("PorA_VR2", ("", "not determined"))
     feta, feta_note = peptides.get("FetA_VR", ("", "not determined"))
-    serogroup = capsule.call if capsule.call in SEROGROUP_MEANING else (
-        "cnl" if capsule.call == "cnl" else "NG")
+    # The first field of the designation is the serological serogroup, and for
+    # an isolate that carries a locus it cannot express that field is NG --
+    # which is why the cps call above states the genogroup and the lesion
+    # instead of leaving the reader with this NG alone.
+    base = serogroup_of(capsule.call)
+    serogroup_basis = ""
+    if base in SEROGROUP_MEANING and AT_CONTIG_END in capsule.call:
+        # Nothing is wrong with the capsule; only the assembly stopped short.
+        serogroup = base
+        serogroup_basis = (f"serogroup {base}; a capsule gene is cut by a contig end, so "
+                           f"expression could not be assessed, which is not evidence "
+                           f"against it")
+    elif capsule.call in SEROGROUP_MEANING:
+        serogroup = capsule.call
+    elif capsule.call == "cnl":
+        serogroup = "cnl"
+    else:
+        serogroup = "NG"
+        if base in SEROGROUP_MEANING:
+            serogroup_basis = (f"NG, the serological designation: the capsule locus is that "
+                               f"of serogroup {base} but carries a lesion that stops "
+                               f"expression, so the cps call above reads "
+                               f"'{capsule.call}'")
     pora = f"P1.{vr1 or '?'},{vr2 or '?'}"
     fet = feta or "?"
     call = f"{serogroup}:{pora}:{fet}"
@@ -975,6 +1114,7 @@ def _call_finetype(capsule: TypingResult, peptides: dict[str, tuple[str, str]],
         "PorA_VR2": vr2 or "not determined",
         "FetA_VR": feta or "not determined",
         "full_designation": full,
+        **({"serogroup_field": serogroup_basis} if serogroup_basis else {}),
         "nomenclature": "serogroup : PorA type : FetA type : sequence type (clonal "
                         "complex), as recommended for molecular typing of meningococci; "
                         "PorA variable regions are surface loops 1 and 4 of the class 1 "
