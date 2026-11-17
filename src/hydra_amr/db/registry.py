@@ -43,6 +43,46 @@ class DbSpec:
     notes: str = ""
 
 
+#: The PubMLST terms, quoted where they decide what may be redistributed.
+#:
+#: PubMLST publishes no open licence. Its Terms and Conditions
+#: (https://pubmlst.org/terms-conditions, page dated 2026-05-13, retrieved
+#: 2026-11-17) split the data by submission date, and the deciding sentence is
+#: quoted here in full because a paraphrase would not do: everything Hydra
+#: ships or redistributes rests on it.
+#:
+#: The right depends entirely on the download being anonymous. The
+#: unauthenticated REST API answers every request with
+#: ``"Please note that you are currently restricted to accessing data that was
+#: submitted on or prior to 2024-12-31. Please authenticate to access the full
+#: dataset."``, and an anonymous ``?added_after=2025-01-01`` query returns zero
+#: records, so an anonymous download can only return pre-2025 data. Sending an
+#: API key or any other credential would pull post-2024 data and with it
+#: Section 4's clause forbidding redistribution -- so no fetcher in Hydra sends
+#: one, and none ever should.
+PUBMLST_TERMS = (
+    "PubMLST Terms and Conditions (https://pubmlst.org/terms-conditions, page dated "
+    "2026-05-13, retrieved 2026-11-17); not a named licence but a University of Oxford "
+    "terms-of-use document. The deciding sentence: \"All data submitted on or before "
+    "31 December 2024 may continue to be downloaded, used, and redistributed without "
+    "restriction, subject only to proper scientific citation and acknowledgement.\" The "
+    "terms add that \"The restrictions described in Sections 4 and 5 do not apply to "
+    "pre-2025 data\", and \"Anonymous (non-logged in) users may view only pre 2025 "
+    "data\". This snapshot is therefore fetched anonymously and contains only pre-2025 "
+    "data; it must never be fetched with an API key or any other credential. Required "
+    "acknowledgement: \"This publication made use of the PubMLST website "
+    "(https://pubmlst.org/) sited at the University of Oxford. The development of that "
+    "website was funded by the Wellcome Trust.\" Cite Jolley, Bray & Maiden 2018, "
+    "Wellcome Open Res 3:124."
+)
+
+#: The acknowledgement PubMLST asks to appear wherever its data is used.
+PUBMLST_ACKNOWLEDGEMENT = (
+    "This publication made use of the PubMLST website (https://pubmlst.org/) sited at "
+    "the University of Oxford. The development of that website was funded by the "
+    "Wellcome Trust."
+)
+
 DATABASES: dict[str, DbSpec] = {}
 
 
@@ -141,7 +181,11 @@ _register(DbSpec(
     element_type="TYPING", conda_env_hint=("mlst",), conda_rel_path="db",
     url="https://rest.pubmlst.org/db",
     citation="Jolley, Bray & Maiden 2018, Wellcome Open Res 3:124",
+    licence=PUBMLST_TERMS,
     standard=True, aliases=("mlst",),
+    notes="Downloaded anonymously, which is what makes the snapshot "
+          "redistributable: see PUBMLST_TERMS and db/fetch.py's "
+          "verify_pubmlst_is_pre_2025().",
 ))
 _register(DbSpec(
     name="lineage", kind="typing", title="Lineage / sublineage typing loci (Kleborate-derived and extensions)",

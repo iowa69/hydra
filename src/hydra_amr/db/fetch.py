@@ -21,12 +21,14 @@ import subprocess
 import tarfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Callable
 
 from ..seqio import read_fasta, write_fasta
 from ..utils import LOG, HydraError
+from .registry import PUBMLST_ACKNOWLEDGEMENT, PUBMLST_TERMS
 
 #: Upstream is asked to identify us, so operators can see what the traffic is.
 USER_AGENT = "hydra-amr (+https://github.com/iowa69/hydra)"
@@ -327,6 +329,131 @@ PUBMLST_ALIASES = {
 #: requests draws HTTP 429 and silently costs whole schemes, three does not.
 PUBMLST_WORKERS = 3
 
+#: The REST root, used only to ask the server what an anonymous client may see.
+PUBMLST_REST = "https://rest.pubmlst.org"
+#: The first date whose data an anonymous client must not be able to reach.
+PUBMLST_CUTOFF = "2025-01-01"
+#: What the snapshot's provenance file is called, next to the installed schemes.
+PUBMLST_PROVENANCE = "PUBMLST.txt"
+
+
+def pubmlst_access_note(database: str, *, timeout: int = 60) -> str:
+    """What the unauthenticated API says a client of ours may see.
+
+    PubMLST puts a ``message`` on every response to an anonymous request,
+    stating that the client is restricted to data submitted on or before
+    2024-12-31. Reading it back is the server's own word on what the snapshot
+    can contain, which is worth recording next to the data.
+
+    Returns an empty string if it cannot be read; this is provenance, and a
+    network hiccup must not fail an install.
+    """
+    url = f"{PUBMLST_REST}/db/{database}"
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return str(json.load(response).get("message") or "").strip()
+    except (urllib.error.URLError, OSError, ValueError) as exc:
+        LOG.debug("could not read the PubMLST access message for %s: %s", database, exc)
+        return ""
+
+
+def verify_pubmlst_is_pre_2025(database: str, locus: str, *,
+                               timeout: int = 60) -> tuple[bool, str]:
+    """Ask the API directly whether anything post-2024 is reachable.
+
+    BIGSdb accepts ``?added_after=`` on a locus's allele index, so the question
+    "does this anonymous client see any allele submitted in 2025 or later?" can
+    be put to the server and answered with a number rather than with an
+    argument about terms. Zero records is the answer the snapshot's
+    redistributability depends on.
+
+    Returns ``(verified, detail)``. ``verified`` is False both when records come
+    back and when the check could not be made, and the detail says which --
+    they must never be confused, so the caller can refuse to claim a
+    verification it did not get.
+    """
+    url = (f"{PUBMLST_REST}/db/{database}/loci/{urllib.parse.quote(locus, safe='')}"
+           f"/alleles?added_after={PUBMLST_CUTOFF}")
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            payload = json.load(response)
+    except (urllib.error.URLError, OSError, ValueError) as exc:
+        return False, f"not verified: the added_after query failed ({exc})"
+    records = payload.get("records")
+    if records is None:
+        return False, "not verified: the added_after query returned no record count"
+    if int(records) != 0:
+        return False, (f"FAILED: {records} allele(s) of {database}/{locus} were submitted "
+                       f"on or after {PUBMLST_CUTOFF} and are reachable, so this request "
+                       f"was not anonymous")
+    return True, (f"verified: {database}/{locus}?added_after={PUBMLST_CUTOFF} returns 0 "
+                  f"records, so no post-2024 allele is reachable by this client")
+
+
+def write_pubmlst_provenance(root: Path, schemes: list[dict], complete: set[str]) -> Path:
+    """Record where the snapshot came from, and that it is pre-2025 and anonymous.
+
+    A redistributable snapshot has to carry its own evidence: the date it was
+    taken, the sentence in PubMLST's terms that permits redistribution, the
+    server's own statement of what an anonymous client may see, the result of
+    the ``added_after`` check, and the citation and acknowledgement PubMLST
+    asks for. Someone who finds the zip years from now reads this file.
+    """
+    probe = next((s for s in sorted(schemes, key=lambda x: x["scheme"])
+                  if s["scheme"] in complete and s["loci"]), None)
+    checks: list[str] = []
+    if probe is not None:
+        database = _pubmlst_database_of(probe)
+        locus = sorted(probe["loci"])[0]
+        if database:
+            message = pubmlst_access_note(database)
+            if message:
+                checks.append(f"The server's own words, to this anonymous client:\n"
+                              f"    \"{message}\"")
+            _ok, detail = verify_pubmlst_is_pre_2025(database, locus)
+            checks.append(f"Post-2024 data reachable? {detail}")
+    text = f"""PubMLST MLST schemes - snapshot provenance
+=========================================
+
+Retrieved:     {time.strftime('%Y-%m-%d')}
+Source:        {PUBMLST_INDEX} and the per-locus and per-scheme URLs it lists,
+               all under {PUBMLST_REST}
+Schemes:       {len(complete)} complete of {len(schemes)} listed
+Access:        ANONYMOUS. No API key, token, cookie or other credential is sent;
+               the only header is a User-Agent identifying Hydra. This is not a
+               detail: the redistribution right below applies only to pre-2025
+               data, and only an unauthenticated client is limited to it.
+               Authenticating would pull post-2024 data and with it the clause
+               that forbids redistributing it.
+
+Terms
+-----
+{PUBMLST_TERMS}
+
+Verification
+------------
+{chr(10).join(checks) if checks else 'No check could be made at install time.'}
+
+Citation and acknowledgement
+----------------------------
+Cite:  Jolley KA, Bray JE, Maiden MCJ. Open-access bacterial population genomics:
+       BIGSdb software, the PubMLST.org website and their applications.
+       Wellcome Open Res 2018;3:124.
+Acknowledge, wherever this data is used:
+       "{PUBMLST_ACKNOWLEDGEMENT}"
+"""
+    dest = root / PUBMLST_PROVENANCE
+    dest.write_text(text, encoding="utf-8")
+    return dest
+
+
+def _pubmlst_database_of(scheme: dict) -> str:
+    """The seqdef database name out of one of a scheme's URLs."""
+    match = re.search(r"/db/((?:pubmlst_)?[a-z0-9_]+?_seqdef)/", scheme.get("profiles", ""))
+    return match.group(1) if match else ""
+
 
 def pubmlst_scheme_name(species: str, profiles_url: str) -> str:
     """Name one scheme from its database slug and its position in that database.
@@ -441,6 +568,7 @@ def stage_pubmlst(work: Path, progress=None) -> Path:
             LOG.warning("  schemes not installed: %s", ", ".join(dropped))
 
     _write_scheme_map(work / "scheme_species_map.tab", schemes, complete)
+    write_pubmlst_provenance(root, schemes, complete)
     return work
 
 
