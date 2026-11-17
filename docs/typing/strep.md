@@ -262,27 +262,98 @@ separately in RefSeq and are called by name. Both carry large tandem repeats
 whose number varies between strains, so reference coverage well below 100 % is
 normal and is not a lesion.
 
-**The alpha-like protein family member is not named.** *rib*, *alp1*/epsilon,
-*alp2*, *alp3* and *alp4* share their N-terminal domain and their repeat units,
-RefSeq annotates all of them as "alpha-like surface protein" without
-distinguishing them, and no versioned, downloadable allele set for them exists.
-The module reports that an Alp-family gene is present, gives the closest of three
-reference alleles with the identity and coverage, and states that the member is
-not determined. The field reports these in four buckets — alpha, alp1, alp2/3,
-rib — which map onto the AlpN protein-vaccine antigens; assigning them needs a
-curated allele set, which is the single clearest gap in this module.
+The alpha-like protein family member itself is named in scheme `sag_alp`
+(§2.2a); `sag_surface` quotes that call in its `alp_family_member` field rather
+than making a second, weaker attempt at it from the protein panel.
+
+### 2.2a Alpha-like protein family member — scheme `sag_alp`
+
+**What is called.** Which member of the alpha-like protein family the isolate
+carries: `bca (alpha-C protein)`, `alp1 (epsilon)`, `alp2/alp3`, `rib`, or
+`not determined` with the candidates and the reason.
+
+**Why it matters clinically.** The AlpN protein-vaccine candidate is built from
+the N-terminal domains of the alpha-C protein and Rib (Pawlowski 2022), so the
+member an isolate carries is a vaccine-coverage statement: *bca* and *rib* are
+homotypic targets, while Alp1, Alp2 and Alp3 share those domains and give
+heterotypic cross-reactivity without being a homotypic match. The four
+categories reported here — ALPHA, ALP1, ALP23, RIB — are also the four used in
+US national GBS surveillance (McGee 2021), so a call is directly comparable to
+published distributions.
+
+**Why not from the whole gene.** The members differ mostly by how many copies
+of their tandem repeat they carry. Aligning the published *bca*, *rib*, *alp1*,
+*alp2*, *alp3* and *alp4* genes against a finished GBS genome returns between
+100 % and 2 159 % "coverage" of each, because every repeat matches every other
+repeat, so a whole-gene ranking sorts the references by repeat count, not by
+member. This was measured on all twelve validation genomes before the method
+was chosen.
+
+**The method.** The CDC *Streptococcus* Laboratory's GBS surface-gene target
+set (§4.5) carries four *alp* targets — ALPHA (516 bp), ALP1 (516 bp), ALP23
+(620 bp) and RIB (522 bp) — each a short window in the member-specific
+N-terminal region. The assembly is searched with `blastn` (task `blastn`, dust
+off) and, per target, the union of its alignments gives its coverage and the
+best alignment its identity. A target passes when **at least 99 % of it is
+covered at no more than 8 % divergence** — the thresholds the CDC pipeline runs
+these targets at (`srst2 --min_coverage 99.0 --max_divergence 8`, Metcalf 2017;
+read depth, the pipeline's third criterion, has no meaning for an assembly).
+The passing target with the highest identity names the member, **provided it
+beats the next passing target by 5 percentage points of identity**. On the
+validation panel exactly one target ever passed and the observed margin to the
+next target was 21–32 points, so that belt is wide, not tuned; it exists so
+that a divergent or recombinant *alp* gene comes out as `not determined` with
+its candidates. A wrong member is worse than none.
+
+Each call also reports `closest_published_allele`: the deposited allele
+(§4.6) the region most resembles, from the single best alignment per allele.
+This is a second opinion and the only route by which *alp4* can be named; it is
+never the call.
+
+**What is still not named, and why.**
+
+* **alp2 against alp3.** They are mosaics of each other (Lachenauer 2000) and
+  inside the CDC window they differ by **three bases in 620** — measured here
+  against AF208158.1 (*alp2*) and AF245663.1 (*alp3*). Three bases is ordinary
+  allelic variation, so the window matching one of them exactly does not
+  establish which gene it is. The CDC target set calls the pair ALP23 for this
+  reason and so does this module; the closer of the two appears in
+  `closest_published_allele` as evidence only. Separating them would need the
+  full gene, which the repeats make unreliable.
+* **alp4.** It is not in the CDC target set. Its deposited sequence
+  (AJ488912.1) reaches at most 71.6 % identity to any CDC target, so an *alp4*
+  isolate fails the threshold and is reported as an unnamed family member with
+  *alp4* among the candidates, rather than rounded to the nearest named target.
 
 ### 2.3 Pilus islands — scheme `sag_pilus`
 
-PI-2a is named: RefSeq annotates *pilA*, *pilB*, *pilC* and *srtC4* as PI-2a
-genes. The second pilus island locus is detected (the SpaH/EbpB family backbone
-with *srtC1* and *srtC2*) but is **not** assigned to PI-1 or PI-2b, because
-RefSeq annotates the backbone of both the same way and no versioned reference
-set that separates them is downloadable; naming one from a best BLAST hit would
-be a guess. The note records the published facts that frame the result: PI-2a and
-PI-2b occupy the same chromosomal locus and are mutually exclusive, so an isolate
-carrying PI-2a does not carry PI-2b; PI-1 is at a separate locus and can be
-absent; and PI-2b is associated with CC17.
+**What is called.** Which pilus islands the isolate carries, by name: `PI-1`,
+`PI-2a`, `PI-2b`, or combinations of PI-1 with one of the other two.
+
+**The method.** The same CDC target set carries nine pilus targets, each a
+60 bp window unique to one island: PI1 and PI1B (two alleles of PI-1), PI2A1 to
+PI2A4 (four alleles of PI-2a) and PI2B and PI2B2 (two of PI-2b). They are
+screened and thresholded exactly as the *alp* targets are. The RefSeq protein
+panel's operon genes — *pilA*, *pilB*, *pilC*, *srtC4* for PI-2a, and the
+SpaH/EbpB backbone with *srtC1* and *srtC2* for the other locus — are reported
+beside the call as corroborating evidence, because a 60 bp window is a presence
+call and says nothing about whether the whole operon is intact.
+
+**The rule the call is held to.** PI-2a and PI-2b are two variants of one
+island at one chromosomal locus (Rosini 2006), so an isolate carries one of
+them and never both. If targets for both pass, the module reports **`not
+determined`** and says the assembly is either a mixture of two isolates or
+carries a mis-joined contig — it does not pick one. Among 898 human GBS
+isolates PI-1 was found in 70 %, PI-2a in 79 % and PI-2b in 21 %, every isolate
+carried at least one island, and PI-2a and PI-2b summed to 100 % (Martins
+2013); those are the frequencies a profile is read against, and a genome with
+no island at all raises an uncertainty flag.
+
+**Clinical meaning.** PI-2b is strongly associated with the hypervirulent
+neonatal clone CC17 and is read together with the `sag_markers` CC17 call;
+PI-2a's backbone PilB and tip adhesin PilA are pilus-vaccine candidates
+(Margarit 2009); PI-1 sits on a mobile element and is gained and lost within
+lineages, so its absence is not a lineage statement.
 
 ### 2.4 Hypervirulence and neonatal-disease markers — scheme `sag_markers`
 
@@ -358,6 +429,8 @@ residues was verified in time.
 | gene panels | blastx | 55–90 % per gene (see `GeneSpec.min_identity`) | 25–90 % per gene | intact at ≥ 95 % coverage; in-frame indel tolerance 10 residues; contig-edge window 300 bp |
 | hvgA | blastx | ≥ 75 % | ≥ 80 % of 522 aa | separates HvgA from BibA |
 | pbp2x | blastx | — | — | substitutions read from the alignment at 13 catalogued positions |
+| sag_alp | blastn | ≥ 92 % (≤ 8 % divergence) | ≥ 99 % of the CDC target | winner must beat the next passing target by ≥ 5 points of identity, else `not determined` |
+| sag_pilus | blastn | ≥ 92 % (≤ 8 % divergence) | ≥ 99 % of the CDC target | PI-2a and PI-2b together ⇒ `not determined` |
 
 Translated searches run **single-threaded on purpose**
 (`strep_common.BLASTX_THREADS`). A sibling agent reported that BLAST+ 2.16.0
@@ -435,6 +508,58 @@ logged at `fetch()` time, recorded in the manifest's `unresolved` list, and
 reported as "not determined" — never as a negative. At the time of writing this
 affects *cylE* in *S. agalactiae*, and in *S. pyogenes* the genes *ssa*, *sof*,
 *spd1*, *spd3* and *sla*, which are not covered (see §6).
+
+### 4.5 `sagalactiae/surface_targets` — the CDC GBS surface-gene target set
+
+* **Source:**
+  `https://raw.githubusercontent.com/BenJamesMetcalf/GBS_Scripts_Reference/master/GBS_Reference_DB/GBS_Surface_Gene-DB_Final.fasta`
+* **Contents:** 15 targets, 3.4 kB. Four *alp* windows (ALPHA 516 bp, ALP1
+  516 bp, ALP23 620 bp, RIB 522 bp), nine 60 bp pilus-island windows (PI1,
+  PI1B, PI2A1–PI2A4, PI2B, PI2B2) and SRR1, SRR2 and HVGA. Only the *alp* and
+  pilus targets are used: *srr1*, *srr2* and *hvgA* are already called from the
+  RefSeq protein panel with their lesions described, which a 60 bp nucleotide
+  window cannot do.
+* **What it is:** the reference file the CDC *Streptococcus* Laboratory's own
+  GBS typing pipeline screens (Metcalf 2017), and which the Sanger Institute's
+  `GBS-Typer-sanger-nf` inherits — that pipeline's README states it "has been
+  adapted from Ben Metcalf's GBS Typer pipeline" at this repository.
+* **Version:** the repository carries no release tags. `fetch()` records the
+  commit SHA of `master` in `surface_targets.version`; it was **`ac8fe4a5cb59`,
+  2026-08-31**, when this module was written.
+* **Licence:** **none stated.** The repository has no `LICENSE` file and no
+  licence statement, and the GitHub API reports no licence for it. It is a US
+  CDC work product published openly for public-health use, and the Sanger
+  Institute redistributes the same file, but **no permission is stated in
+  writing**. **Redistribution: unstated** — the integrator should weigh this
+  when deciding whether to ship the file inside the Windows zip or fetch it at
+  install time. It is 3.4 kB, so fetching it is cheap.
+* **Integrity check at fetch time:** `_check_surface_targets()` fails if any
+  target the rules name is missing, or if an *alp* target is shorter than
+  400 bp. The calls are nothing but these targets and the thresholds, so a
+  silent upstream rename must not become a silent negative.
+
+### 4.6 `sagalactiae/alp_alleles` — the published alpha-like protein genes
+
+* **Source:** NCBI EFetch for nucleotide `M97256.1`, `U58333.1`, `AH013348.2`,
+  `AF208158.1`, `AF245663.1`, `AJ488912.1`.
+* **Contents:** about 16 kB. The six genes as deposited:
+
+  | Accession | Gene | Source strain | Deposited with |
+  | --- | --- | --- | --- |
+  | M97256.1 | *bca* | **A909** | Michel 1992 |
+  | U58333.1 | *rib* | **BM110** | Wästfelt 1996 |
+  | AH013348.2 | *alp1* | 515 | unpublished direct submission, Lachenauer & Madoff |
+  | AF208158.1 | *alp2* | CJB-110 | Lachenauer 2000 |
+  | AF245663.1 | *alp3* | — | Lachenauer 2000 |
+  | AJ488912.1 | *alp4* | — | Creti 2004 |
+
+  Two of these come from strains in the validation panel, which is why those
+  two rows of the validation table are the strongest expectations available:
+  the deposited sequence *is* the published assignment for that strain.
+* **Used for:** the `closest_published_allele` second opinion, and naming
+  *alp4*, which the CDC target set does not cover. Never for the call itself.
+* **Licence:** NCBI — *"NLM does not claim copyright on the data in the
+  Database"*. **Redistribution:** permitted.
 
 ---
 
@@ -517,7 +642,69 @@ BE-NI-005 → Ib, CUHK_GBS62_918 → VI, ILRI005 → V, strain 290183 → Ia), a
 agreeing with their BioSample serotype where one is recorded; 20/20 overall.
 Serotypes covered: Ia, Ib, II, III (variants III-2 and III-3), V, VI and IX.
 
-**No disagreement to investigate**, but two findings worth stating. The three
+#### 5.2a Alpha-like protein member and pilus islands — the same 12 genomes
+
+Expectation source, strongest first. **(a)** For A909 and BM110 the published
+*bca* and *rib* sequences were cloned from, and deposited from, that very
+strain (M97256.1 from A909, Michel 1992; U58333.1 from BM110, Wästfelt 1996),
+so the defining sequence *is* the expectation. **(b)** For 2603V/R, 18RS21,
+H36B and GB-NI-002 the expectation is the gene name in that strain's own genome
+annotation: SAG0433 "surface protein Rib" (Tettelin 2002), SAJ_0543 "rib
+protein" and SAI_0471 "c protein alpha-antigen precursor" (Tettelin 2005), and
+`bca` / "C protein alpha-antigen" (ERS039697_00779). **(c)** For COH1 the
+expectation is the published CC17 surface profile, *rib* with PI-2b. **(d)**
+For the remaining four no published per-strain assignment was found; those rows
+state that and are held only to the rules every isolate must obey.
+
+| Accession | Strain | Expected Alp member | Source class | Obtained | Evidence | Expected PI | Obtained |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| GCF_000012705.1 | A909 | *bca* | (a) deposited **from A909** | **bca (alpha-C protein)** | ALPHA 100 % of 516 bp at 100.0 % | — | **PI-1 + PI-2b** |
+| GCF_900155855.1 | BM110 | *rib* | (a) deposited **from BM110** | **rib** | RIB 100 % of 522 bp at 100.0 % | PI-2b (CC17) | **PI-1 + PI-2b** |
+| GCF_030489705.1 | COH1 | *rib* | (c) CC17 profile | **rib** | RIB 100 % at 100.0 % | PI-2b (CC17) | **PI-1 + PI-2b** |
+| GCF_000007265.1 | 2603V/R | *rib* | (b) SAG0433 "surface protein Rib" | **rib** | RIB 100 % at 99.8 % | — | **PI-1 + PI-2a** |
+| GCA_000167715.1 | 18RS21 | *rib* | (b) SAJ_0543 "rib protein" | **rib** | RIB 100 % at 100.0 % | — | **PI-1 + PI-2a** |
+| GCA_000167795.1 | H36B | *bca* | (b) SAI_0471 "c protein alpha-antigen" | **bca (alpha-C protein)** | ALPHA 100 % at 100.0 % | — | **PI-2a** |
+| GCF_001217725.1 | GB-NI-002 | *bca* | (b) `bca` in the record | **bca (alpha-C protein)** | ALPHA 100 % at 100.0 % | — | **PI-2a** |
+| GCF_000196055.1 | NEM316 | not *rib*, not *bca* | (d) sequence only | **alp2/alp3** | ALP23 100 % of 620 bp at 99.5 %; RIB 68.3 %, ALPHA 77.6 % | — | **PI-1 + PI-2a** |
+| GCA_001010335.1 | DK-PW-097 | — | (d) sequence only; see disagreement below | **alp2/alp3** | ALP23 100 % of 620 bp at 100.0 % | — | **PI-1 + PI-2a** |
+| GCA_001015895.1 | 325662 | — | (d) sequence only | **bca (alpha-C protein)** | ALPHA 100 % at 100.0 % | — | **PI-2a** |
+| GCA_001016915.1 | ES-PW-195 | — | (d) sequence only | **bca (alpha-C protein)** | ALPHA 100 % at 100.0 % | — | **PI-2a** |
+| GCF_000427055.1 | ILRI112 | none (tilapia isolate, outside the human lineages) | (d) the negative case | **no alpha-like protein gene detected** | no CDC *alp* target aligned at all | — | **PI-2b** |
+
+**11/11 agreement where an expectation exists, and the negative case stays
+negative.** In every genome exactly one *alp* target passed; the margin to the
+next target was 21.4–32.2 percentage points of identity, so nothing was decided
+on a narrow call. The independent cross-check — ranking the six deposited
+alleles by best alignment — agreed with the CDC call in all twelve.
+
+**Pilus islands: 12/12 on the published rule.** Every genome carried exactly
+one of PI-2a and PI-2b and none carried both, which is what the one-locus,
+two-variants structure (Rosini 2006) and the 79 % / 21 % split summing to 100 %
+(Martins 2013) require. Observed: PI-2a in 8/12, PI-2b in 4/12, PI-1 in 7/12 —
+consistent with the published 79 % / 21 % / 70 % at this sample size. Both CC17
+strains carried PI-2b, as published. For most individual strains **no published
+pilus profile was found**, so those are reported as observed; the rule and the
+CC17 association are the validation, and the honest limit is that this scheme
+is validated as a *rule-conforming* call rather than against twelve published
+per-strain profiles.
+
+**One disagreement, investigated and not tuned away.** DK-PW-097's
+alpha-like-protein CDS is annotated "surface protein Rib" in its assembly
+record, which contradicts the `alp2/alp3` call. The annotation is automated
+(`"Derived by automated computational analysis"`) and the sequence contradicts
+it decisively: the gene matches the CDC RIB target at **68.3 %** identity and
+the ALP23 target at **100 %** over the full 620 bp, and its closest deposited
+allele is *alp3* at 99.9 %. Automated pipelines name every alpha-like-protein
+family gene either "surface protein Rib" or "alpha-like surface protein" from
+an HMM match, without resolving the member — the same reason this module does
+not read the member off the annotation. Where the sequence and the automated
+product name agree (2603V/R, 18RS21), the annotation is corroboration; where
+they disagree, the sequence decides. This is recorded rather than hidden
+because it means **an Alp call read from a RefSeq or PGAP product name is not
+reliable**, which is worth knowing beyond this module.
+
+**No disagreement to investigate** in the capsular and CC17 calls, but two
+findings worth stating. The three
 serologically non-typeable strains are called V, Ia and II at full coverage and
 > 99.7 % identity — correct as *genotypes*, and precisely why the output is
 labelled capsular genotype. And no genome in the panel is a reduced-penicillin-
@@ -547,8 +734,10 @@ validation tests download the genomes and build the databases.
 | **FCT region type, T antigen type** | need the pilus backbone allele matched against an allele set that is not published in versioned, downloadable form. |
 | **speA and smeZ allele numbers** | the allele series are published but not distributed as a versioned reference set. Residue differences from the named reference are reported instead. |
 | **ssa, sof, spd1, spd3, sla** | not named by gene symbol in the current RefSeq annotation of the panel strains, so no traceable reference protein could be selected. Listed as unresolved in the manifest. |
-| **Alp family member (rib, alp1, alp2, alp3, alp4)** | the members share N-terminal domains and repeats; RefSeq does not distinguish them and no versioned allele set exists. Family presence is reported. |
-| **PI-1 against PI-2b** | RefSeq annotates both backbones identically. The second island locus is detected but not named. |
+| ***alp2* against *alp3*** | they are mosaics of each other and differ by three bases in 620 inside the only reliable discriminating window. Reported together as `alp2/alp3`, which is also the CDC and national-surveillance convention; the closer deposited allele is given as evidence. Separating them needs the full gene, which the tandem repeats make unreliable. |
+| ***alp4*** | not in the CDC target set, and at most 71.6 % identical to any of its targets. An *alp4* isolate is reported as an unnamed family member with *alp4* named among the candidates — never rounded to the nearest target. |
+| **Whether a named pilus operon is intact** | the islands are named from 60 bp windows, which is a presence call only. The RefSeq operon genes are reported beside the call; a truncated *pilB* in a PI-2a-positive isolate would not currently be called as such. |
+| **Per-strain published pilus profiles** | the island call conforms to the published rules (exactly one of PI-2a/PI-2b; CC17 ⇒ PI-2b) in 12/12 genomes, but published per-strain profiles were found for only the two CC17 strains. A panel with published PI profiles for each strain is the missing validation. |
 | **Clonal complex** | follows from the MLST sequence type, which Hydra reports separately. The PubMLST *S. agalactiae* scheme does publish a clonal-complex field; *S. pyogenes* does not. |
 | **gyrA / parC quinolone positions** | no primary source for the specific residues was verified. |
 | **Prophage boundaries and attachment sites** | an assembly does not resolve them. Regions are reported as the span their marker genes cover, with that stated. |
@@ -631,7 +820,17 @@ software repository, cited as such.
 - **Cieslewicz MJ, Chaffin D, Glusman G, et al.** (2005). Structural and genetic diversity of group B Streptococcus capsular polysaccharides. *Infection and Immunity 73:3096-3103*. PMID [15845517](https://pubmed.ncbi.nlm.nih.gov/15845517/); DOI [10.1128/IAI.73.5.3096-3103.2005](https://doi.org/10.1128/IAI.73.5.3096-3103.2005).
   <br>*Supports:* the structure of the cps locus, which genes determine the serotype, and the molecular basis of the serotypes Ia to IX.
 - **Creti R, Fabretti F, Orefici G, von Hunolstein C** (2004). Multiplex PCR assay for direct identification of group B streptococcal alpha-protein-like protein genes. *Journal of Clinical Microbiology 42:1326-1329*. PMID [15004110](https://pubmed.ncbi.nlm.nih.gov/15004110/); DOI [10.1128/JCM.42.3.1326-1329.2004](https://doi.org/10.1128/JCM.42.3.1326-1329.2004).
-  <br>*Supports:* the alpha-like protein family (bca, rib, alp1/epsilon, alp2, alp3, alp4) and the sequence similarity between its members that stops this module naming one of them.
+  <br>*Supports:* the alpha-like protein family (bca, rib, alp1/epsilon, alp2, alp3, alp4), the equivalence of alp1 and epsilon, and the deposited alp4 sequence AJ488912.1, which is the allele the CDC target set does not cover.
+- **Lachenauer CS, Creti R, Michel JL, Madoff LC** (2000). Mosaicism in the alpha-like protein genes of group B streptococci. *Proceedings of the National Academy of Sciences USA 97:9630-9635*. PMID [10944228](https://pubmed.ncbi.nlm.nih.gov/10944228/); DOI [10.1073/pnas.97.17.9630](https://doi.org/10.1073/pnas.97.17.9630).
+  <br>*Supports:* alp2 and alp3 as mosaics of one another and of bca and rib, which is why alp2 and alp3 are reported as a pair and never separated; and the deposited alp2 (AF208158.1, from CJB-110) and alp3 (AF245663.1) sequences the module checks the call against.
+- **Wästfelt M, Stålhammar-Carlemalm M, Delisse AM, et al.** (1996). Identification of a family of streptococcal surface proteins with extremely repetitive structure. *The Journal of Biological Chemistry 271:18892-18897*. PMID [8702550](https://pubmed.ncbi.nlm.nih.gov/8702550/); DOI [10.1074/jbc.271.31.18892](https://doi.org/10.1074/jbc.271.31.18892).
+  <br>*Supports:* rib and its repeat structure, and the deposited rib sequence U58333.1 — which comes from validation strain BM110 and is therefore that strain's published expectation.
+- **Metcalf BJ, Chochua S, Gertz RE Jr, et al.** (2017). Short-read whole genome sequencing for determination of antimicrobial resistance mechanisms and capsular serotypes of current invasive Streptococcus agalactiae recovered in the USA. *Clinical Microbiology and Infection 23:574.e7-574.e14*. PMID [28257899](https://pubmed.ncbi.nlm.nih.gov/28257899/); DOI [10.1016/j.cmi.2017.02.021](https://doi.org/10.1016/j.cmi.2017.02.021).
+  <br>*Supports:* the CDC GBS whole-genome typing pipeline whose surface-gene target set and thresholds (99 % target coverage, at most 8 % divergence) this module applies to assemblies.
+- **McGee L, Chochua S, Li Z, et al.** (2021). Multistate, population-based distributions of candidate vaccine targets, clonal complexes, and resistance features of invasive group B streptococci within the United States, 2015-2017. *Clinical Infectious Diseases 72:1004-1013*. PMID [32060499](https://pubmed.ncbi.nlm.nih.gov/32060499/); DOI [10.1093/cid/ciaa151](https://doi.org/10.1093/cid/ciaa151).
+  <br>*Supports:* the reporting convention this module follows — ALPHA, ALP1, ALP23 and RIB as the four alpha-like protein categories in national surveillance, with alp2 and alp3 reported together.
+- **Pawlowski A, Lannergård J, Gonzalez-Miro M, et al.** (2022). A group B Streptococcus alpha-like protein subunit vaccine induces functionally active antibodies in humans targeting homotypic and heterotypic strains. *Cell Reports Medicine 3:100511*. PMID [35243418](https://pubmed.ncbi.nlm.nih.gov/35243418/); DOI [10.1016/j.xcrm.2022.100511](https://doi.org/10.1016/j.xcrm.2022.100511).
+  <br>*Supports:* why naming the family member matters clinically — the AlpN candidate is built from the N-terminal domains of the alpha-C protein and Rib, so which member an isolate carries is a vaccine-coverage statement.
 - **Da Cunha V, Davies MR, Douarre PE, et al.** (2014). Streptococcus agalactiae clones infecting humans were selected and fixed through the extensive use of tetracycline. *Nature Communications 5:4544*. PMID [25088811](https://pubmed.ncbi.nlm.nih.gov/25088811/); DOI [10.1038/ncomms5544](https://doi.org/10.1038/ncomms5544).
   <br>*Supports:* the global GBS collection the validation genomes with published serotypes are drawn from, and the clonal-complex structure of human GBS.
 - **Dahesh S, Hensler ME, Van Sorge NM, et al.** (2008). Point mutation in the group B streptococcal pbp2x gene conferring decreased susceptibility to beta-lactam antibiotics. *Antimicrobial Agents and Chemotherapy 52:2915-2918*. PMID [18541727](https://pubmed.ncbi.nlm.nih.gov/18541727/); DOI [10.1128/AAC.00461-08](https://doi.org/10.1128/AAC.00461-08).
@@ -651,7 +850,7 @@ software repository, cited as such.
 - **Margarit I, Rinaudo CD, Galeotti CL, et al.** (2009). Preventing bacterial infections with pilus-based vaccines: the group B Streptococcus paradigm. *The Journal of Infectious Diseases 199:108-115*. PMID [19086816](https://pubmed.ncbi.nlm.nih.gov/19086816/); DOI [10.1086/595564](https://doi.org/10.1086/595564).
   <br>*Supports:* the PI-2a gene set (pilA, pilB, pilC), the distribution of the islands across lineages, and their use as vaccine candidates.
 - **Martins ER, Andreu A, Melo-Cristino J, Ramirez M** (2013). Distribution of pilus islands in Streptococcus agalactiae that cause human infections: insights into evolution and implication for vaccine development. *Clinical and Vaccine Immunology 20:313-316*. PMID [23269415](https://pubmed.ncbi.nlm.nih.gov/23269415/); DOI [10.1128/CVI.00529-12](https://doi.org/10.1128/CVI.00529-12).
-  <br>*Supports:* the pilus-island profiles seen in human disease and the association of PI-2b with CC17, which the pilus call is interpreted against.
+  <br>*Supports:* the pilus-island frequencies this module quotes (PI-1 70 %, PI-2a 79 %, PI-2b 21 % of 898 human isolates, every isolate carrying at least one island and PI-2a and PI-2b summing to 100 %, so they are mutually exclusive), and the association of PI-2b with CC17, against which the pilus call is validated.
 - **Michel JL, Madoff LC, Olson K, et al.** (1992). Large, identical, tandem repeating units in the C protein alpha antigen gene, bca, of group B streptococci. *Proceedings of the National Academy of Sciences USA 89:10060-10064*. PMID [1438195](https://pubmed.ncbi.nlm.nih.gov/1438195/); DOI [10.1073/pnas.89.21.10060](https://doi.org/10.1073/pnas.89.21.10060).
   <br>*Supports:* bca, the alpha-C protein, and its tandem repeat structure, which is why reference coverage below 100% is expected.
 - **O'Leary NA, Wright MW, Brister JR, et al.** (2016). Reference sequence (RefSeq) database at NCBI: current status, taxonomic expansion, and functional annotation. *Nucleic Acids Research 44:D733-D745*. PMID [26553804](https://pubmed.ncbi.nlm.nih.gov/26553804/); DOI [10.1093/nar/gkv1189](https://doi.org/10.1093/nar/gkv1189).
@@ -659,7 +858,7 @@ software repository, cited as such.
 - **Rosa-Fraile M, Dramsi S, Spellerberg B** (2014). Group B streptococcal haemolysin and pigment, a tale of twins. *FEMS Microbiology Reviews 38:932-946*. PMID [24617549](https://pubmed.ncbi.nlm.nih.gov/24617549/); DOI [10.1111/1574-6976.12071](https://doi.org/10.1111/1574-6976.12071).
   <br>*Supports:* the beta-haemolysin/cytolysin and the clinical meaning printed for the virulence genes in the marker panel.
 - **Rosini R, Rinaudo CD, Soriani M, et al.** (2006). Identification of novel genomic islands coding for antigenic pilus-like structures in Streptococcus agalactiae. *Molecular Microbiology 61:126-141*. PMID [16824100](https://pubmed.ncbi.nlm.nih.gov/16824100/); DOI [10.1111/j.1365-2958.2006.05225.x](https://doi.org/10.1111/j.1365-2958.2006.05225.x).
-  <br>*Supports:* the pilus islands and their gene content, which is why the second island locus is detected but not named PI-1 or PI-2b.
+  <br>*Supports:* the pilus islands PI-1, PI-2a and PI-2b, their gene content, and that PI-2a and PI-2b are variants of one island at one locus, which is why an isolate carries one of the two and never both.
 - **Rosini R, Campisi E, De Chiara M, et al.** (2015). Genomic analysis reveals the molecular basis for capsule loss in the group B Streptococcus population. *PLoS One 10:e0125985*. PMID [25946017](https://pubmed.ncbi.nlm.nih.gov/25946017/); DOI [10.1371/journal.pone.0125985](https://doi.org/10.1371/journal.pone.0125985).
   <br>*Supports:* why a capsular genotype is not a serological serotype: 89 of 96 serologically non-typeable strains carry an inactivating mutation in cps, most often a premature stop in cpsE, which a coverage-and-identity rule cannot see. This is the basis of the caveat printed with every cps call.
 - **Six A, Bellais S, Bouaboud A, et al.** (2015). Srr2, a multifaceted adhesin expressed by ST-17 hypervirulent group B Streptococcus involved in binding to both fibrinogen and plasminogen. *Molecular Microbiology 97:1209-1222*. PMID [26094503](https://pubmed.ncbi.nlm.nih.gov/26094503/); DOI [10.1111/mmi.13097](https://doi.org/10.1111/mmi.13097).

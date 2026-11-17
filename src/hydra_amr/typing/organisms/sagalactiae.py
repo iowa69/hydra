@@ -6,8 +6,9 @@ What this module reports, in the order a clinical report wants it:
    locus, by the published GBS-SBG rules: the reference serotype whose
    serotype-determining *cps* region the assembly covers best, with the
    uncertainty flags the reference tool defines.
-2. **Surface proteins and pilus islands**: the alpha-like protein family, the
-   serine-rich repeat adhesins *srr1* and *srr2*, and the pilus-island genes.
+2. **Surface proteins and pilus islands**: the alpha-like protein family member
+   by name, the serine-rich repeat adhesins *srr1* and *srr2*, and the pilus
+   island carried, named PI-1, PI-2a or PI-2b.
 3. **The hypervirulent-clone markers** and the rest of the repertoire used in
    neonatal-disease and vaccine reporting.
 
@@ -19,14 +20,30 @@ serology usually carries an intact, typeable *cps* locus and will be given a
 serotype here; the discrepancy is in capsule expression, not in the genotype.
 The module says which it is reporting.
 
-**The alpha-like protein family is reported as a family, not by member name.**
-*bca* (alpha-C) and *bac* (beta-C) are separately annotated and are called by
-name. *rib*, *alp1*/epsilon, *alp2*, *alp3* and *alp4* share their N-terminal
-domain and their repeat units, RefSeq annotates all of them as "alpha-like
-surface protein" without distinguishing them, and no versioned, downloadable
-allele set for them exists. Naming one of them from a best BLAST hit would be
-guessing, so the module reports that an Alp-family gene is present, gives the
-closest reference and the identity, and says the member is not determined.
+**The alpha-like protein member is named from a discriminating window, not
+from the whole gene.** The family members differ mostly by how many copies of
+their tandem repeat they carry, so a whole-gene alignment ranks references by
+repeat count rather than by member: aligning the published *bca*, *rib*,
+*alp1*, *alp2*, *alp3* and *alp4* sequences against a finished GBS genome
+returns 100-2000% "coverage" of each, because every repeat matches every other
+repeat. The module therefore uses the CDC *Streptococcus* Laboratory's GBS
+surface-gene target set, whose *alp* targets are short windows in the
+member-specific N-terminal region, under the thresholds the CDC pipeline runs
+them at. On the validation panel the winning target matches at 99.5-100%
+identity over its full length while every other target stays at or below 78%,
+so the call is made on a margin of more than twenty percentage points.
+
+Two things are still deliberately *not* named:
+
+* **alp2 and alp3 are reported together, as "alp2/alp3".** They are mosaics of
+  each other (Lachenauer 2000), and in the discriminating window they differ by
+  three bases in 620 - measured here, against the deposited alp2 and alp3
+  sequences. The CDC target set calls them ALP23 for that reason and so does
+  this module; the closest of the two is reported as evidence only.
+* **alp4 is not in the CDC target set.** Its deposited sequence reaches at most
+  71.6% identity to any CDC target, so an *alp4* isolate fails the threshold
+  and is reported as an unnamed family member with *alp4* among the candidates,
+  rather than being rounded to the nearest named target.
 
 See ``docs/typing/strep.md`` for the rules, thresholds and bibliography.
 """
@@ -65,6 +82,81 @@ GBS_SBG_URL = ("https://raw.githubusercontent.com/swainechen/GBS-SBG/main/"
                "GBS-SBG.fasta")
 GBS_SBG_LICENCE_URL = ("https://raw.githubusercontent.com/swainechen/GBS-SBG/"
                        "main/LICENSE")
+
+# ----------------------------------------- the CDC GBS surface-gene target set
+#: The CDC *Streptococcus* Laboratory's GBS surface-gene reference, the file its
+#: own GBS typing pipeline screens and the one the Sanger adaptation of that
+#: pipeline inherits. Fifteen short targets: four for the alpha-like protein
+#: family, nine for the pilus islands, and *srr1*, *srr2* and *hvgA*. Only the
+#: alp and pilus targets are used here; *srr* and *hvgA* are already called from
+#: the RefSeq protein panel, with their lesions described, which a 60 bp
+#: nucleotide window cannot do.
+CDC_SURFACE_REPO = "BenJamesMetcalf/GBS_Scripts_Reference"
+CDC_SURFACE_URL = ("https://raw.githubusercontent.com/BenJamesMetcalf/"
+                   "GBS_Scripts_Reference/master/GBS_Reference_DB/"
+                   "GBS_Surface_Gene-DB_Final.fasta")
+
+#: The CDC pipeline screens this file with ``srst2 --min_coverage 99.0
+#: --max_divergence 8``, then keeps a target at read depth >= 10 and divergence
+#: <= 8. Depth has no meaning for an assembly; the other two carry over as
+#: "at least 99% of the target length aligned, at no more than 8% divergence".
+CDC_MIN_COVERAGE = 99.0
+CDC_MAX_DIVERGENCE = 8.0
+CDC_MIN_IDENTITY = 100.0 - CDC_MAX_DIVERGENCE
+
+#: A single member is named only if it beats the next passing target by this
+#: many percentage points of nucleotide identity. On the validation panel the
+#: observed margin is 21-32 points, so this is a wide safety belt and not a
+#: tuned threshold: it exists so that a divergent or recombinant *alp* gene
+#: comes out as "not determined" with its candidates rather than as a wrong
+#: name. A wrong member is worse than none.
+ALP_MIN_MARGIN = 5.0
+
+#: CDC target -> (what the module reports, what it means clinically).
+ALP_TARGETS: dict[str, tuple[str, str]] = {
+    "ALPHA": ("bca (alpha-C protein)",
+              "the alpha-C protein; one of the two N-terminal domains in the "
+              "AlpN alpha-like-protein vaccine candidate"),
+    "ALP1": ("alp1 (epsilon)",
+             "Alp1, also called epsilon; a mosaic of the alpha-C protein that "
+             "shares its N-terminal domain"),
+    "ALP23": ("alp2/alp3",
+              "Alp2 or Alp3; the two are mosaics of each other and are not "
+              "separated - see the module docstring"),
+    "RIB": ("rib",
+            "Rib; the alpha-like protein of the CC17 neonatal clone and the "
+            "other N-terminal domain in the AlpN vaccine candidate"),
+}
+
+#: CDC pilus target -> island. PI1/PI1B are two alleles of PI-1, PI2A1-PI2A4
+#: four alleles of PI-2a and PI2B/PI2B2 two of PI-2b.
+PILUS_TARGETS: dict[str, str] = {
+    "PI1": "PI-1", "PI1B": "PI-1",
+    "PI2A1": "PI-2a", "PI2A2": "PI-2a", "PI2A3": "PI-2a", "PI2A4": "PI-2a",
+    "PI2B": "PI-2b", "PI2B2": "PI-2b",
+}
+
+#: What each island means in a report.
+PILUS_MEANING: dict[str, str] = {
+    "PI-1": "PI-1, carried by about 70% of human GBS isolates; it sits on a "
+            "mobile element and is gained and lost within lineages",
+    "PI-2a": "PI-2a, carried by about 79% of human GBS isolates; its backbone "
+             "protein PilB and tip adhesin PilA are pilus-vaccine candidates",
+    "PI-2b": "PI-2b, carried by about 21% of human GBS isolates and strongly "
+             "associated with the hypervirulent neonatal clone CC17",
+}
+
+#: The published alpha-like protein genes, as deposited, used only as a second
+#: opinion on the CDC call and to name a candidate when no CDC target passes.
+#: Each entry is (accession, gene, source strain, Reference.key).
+ALP_ALLELES: tuple[tuple[str, str, str, str], ...] = (
+    ("M97256.1", "bca", "A909", "Michel1992"),
+    ("U58333.1", "rib", "BM110", "Wastfelt1996"),
+    ("AH013348.2", "alp1", "515", ""),
+    ("AF208158.1", "alp2", "CJB-110", "Lachenauer2000"),
+    ("AF245663.1", "alp3", "", "Lachenauer2000"),
+    ("AJ488912.1", "alp4", "", "Creti2004"),
+)
 
 # ------------------------------------------------------- GBS-SBG calling rules
 #: "The default cutoffs correspond to those used in SRST2 - at least 90%
@@ -329,6 +421,46 @@ DATABASES: tuple[OrganismDb, ...] = (
               "name. The built database is about 30 kB; the download is about "
               "6 MB and is cached under db_dir/sagalactiae/refseq/.",
     ),
+    OrganismDb(
+        name="surface_targets",
+        source=CDC_SURFACE_URL,
+        version="the repository carries no release tags; fetch() records the "
+                "commit SHA of master at retrieval time in "
+                "surface_targets.version (ac8fe4a5cb59, 2026-08-31, at the "
+                "time this module was written)",
+        licence="none stated: the repository carries no LICENSE file and no "
+                "licence statement, and the GitHub API reports no licence for "
+                "it. It is a US Centers for Disease Control and Prevention "
+                "work product published openly for public-health use, and the "
+                "Sanger Institute's GBS-Typer-sanger-nf redistributes the same "
+                "file, but no permission is stated in writing",
+        redistribution="unstated",
+        reference="Metcalf2017",
+        notes="15 targets, 3.4 kB: ALPHA, ALP1, ALP23 and RIB (516-620 bp "
+              "windows in the member-specific N-terminal region of the "
+              "alpha-like protein genes), PI1, PI1B, PI2A1-PI2A4, PI2B and "
+              "PI2B2 (60 bp pilus-island windows), SRR1, SRR2 and HVGA. The "
+              "integrator should note the unstated licence when deciding "
+              "whether to ship this file inside the Windows zip or to fetch it.",
+    ),
+    OrganismDb(
+        name="alp_alleles",
+        source="https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi "
+               "(GenBank nucleotide: "
+               + ", ".join(a for a, _g, _s, _r in ALP_ALLELES) + ")",
+        version="pinned accession.version per allele, see ALP_ALLELES",
+        licence="NCBI: \"NLM does not claim copyright on the data in the "
+                "Database\"; GenBank records are free to use and redistribute.",
+        redistribution="permitted",
+        reference="Lachenauer2000",
+        notes="The six published alpha-like protein genes as deposited, about "
+              "16 kB in total: bca from A909 (Michel 1992), rib from BM110 "
+              "(Wastfelt 1996), alp1 from strain 515 (an unpublished direct "
+              "submission by Lachenauer and Madoff), alp2 from CJB-110 and "
+              "alp3 (Lachenauer 2000) and alp4 (Creti 2004). Used as a second "
+              "opinion on the CDC call and to name alp4, which the CDC target "
+              "set does not cover.",
+    ),
 )
 
 REFERENCES: tuple[Reference, ...] = (
@@ -438,8 +570,10 @@ REFERENCES: tuple[Reference, ...] = (
         journal="Molecular Microbiology 61:126-141",
         doi="10.1111/j.1365-2958.2006.05225.x",
         pmid="16824100",
-        supports="the pilus islands and their gene content, which is why the "
-                 "second island locus is detected but not named PI-1 or PI-2b",
+        supports="the pilus islands PI-1, PI-2a and PI-2b, their gene content, "
+                 "and that PI-2a and PI-2b are variants of one island at one "
+                 "locus, which is why an isolate carries one of the two and "
+                 "never both",
     ),
     Reference(
         key="Margarit2009",
@@ -513,8 +647,80 @@ REFERENCES: tuple[Reference, ...] = (
         doi="10.1128/JCM.42.3.1326-1329.2004",
         pmid="15004110",
         supports="the alpha-like protein family (bca, rib, alp1/epsilon, alp2, "
-                 "alp3, alp4) and the sequence similarity between its members "
-                 "that stops this module naming one of them",
+                 "alp3, alp4), the equivalence of alp1 and epsilon, and the "
+                 "deposited alp4 sequence AJ488912.1, which is the allele the "
+                 "CDC target set does not cover",
+    ),
+    Reference(
+        key="Lachenauer2000",
+        authors="Lachenauer CS, Creti R, Michel JL, Madoff LC",
+        year=2000,
+        title="Mosaicism in the alpha-like protein genes of group B "
+              "streptococci",
+        journal="Proceedings of the National Academy of Sciences USA "
+                "97:9630-9635",
+        doi="10.1073/pnas.97.17.9630",
+        pmid="10944228",
+        supports="alp2 and alp3 as mosaics of one another and of bca and rib, "
+                 "which is why alp2 and alp3 are reported as a pair and never "
+                 "separated; and the deposited alp2 (AF208158.1) and alp3 "
+                 "(AF245663.1) sequences the module checks the call against",
+    ),
+    Reference(
+        key="Wastfelt1996",
+        authors="Wastfelt M, Stalhammar-Carlemalm M, Delisse AM, et al.",
+        year=1996,
+        title="Identification of a family of streptococcal surface proteins "
+              "with extremely repetitive structure",
+        journal="The Journal of Biological Chemistry 271:18892-18897",
+        doi="10.1074/jbc.271.31.18892",
+        pmid="8702550",
+        supports="rib and its repeat structure, and the deposited rib sequence "
+                 "U58333.1, which comes from validation strain BM110 and is "
+                 "therefore that strain's published expectation",
+    ),
+    Reference(
+        key="Metcalf2017",
+        authors="Metcalf BJ, Chochua S, Gertz RE Jr, et al.",
+        year=2017,
+        title="Short-read whole genome sequencing for determination of "
+              "antimicrobial resistance mechanisms and capsular serotypes of "
+              "current invasive Streptococcus agalactiae recovered in the USA",
+        journal="Clinical Microbiology and Infection 23:574.e7-574.e14",
+        doi="10.1016/j.cmi.2017.02.021",
+        pmid="28257899",
+        supports="the CDC GBS whole-genome typing pipeline whose surface-gene "
+                 "target set and thresholds (99% target coverage, at most 8% "
+                 "divergence) this module applies to assemblies",
+    ),
+    Reference(
+        key="McGee2021",
+        authors="McGee L, Chochua S, Li Z, et al.",
+        year=2021,
+        title="Multistate, population-based distributions of candidate vaccine "
+              "targets, clonal complexes, and resistance features of invasive "
+              "group B streptococci within the United States, 2015-2017",
+        journal="Clinical Infectious Diseases 72:1004-1013",
+        doi="10.1093/cid/ciaa151",
+        pmid="32060499",
+        supports="the reporting convention this module follows - ALPHA, ALP1, "
+                 "ALP23 and RIB as the four alpha-like protein categories in "
+                 "national surveillance, with alp2 and alp3 reported together",
+    ),
+    Reference(
+        key="Pawlowski2022",
+        authors="Pawlowski A, Lannergard J, Gonzalez-Miro M, et al.",
+        year=2022,
+        title="A group B Streptococcus alpha-like protein subunit vaccine "
+              "induces functionally active antibodies in humans targeting "
+              "homotypic and heterotypic strains",
+        journal="Cell Reports Medicine 3:100511",
+        doi="10.1016/j.xcrm.2022.100511",
+        pmid="35243418",
+        supports="why naming the family member matters clinically: the AlpN "
+                 "candidate is built from the N-terminal domains of the "
+                 "alpha-C protein and Rib, so which member an isolate carries "
+                 "is a vaccine-coverage statement",
     ),
     Reference(
         key="Brodeur2000",
@@ -578,9 +784,12 @@ REFERENCES: tuple[Reference, ...] = (
         journal="Clinical and Vaccine Immunology 20:313-316",
         doi="10.1128/CVI.00529-12",
         pmid="23269415",
-        supports="the pilus-island profiles seen in human disease and the "
-                 "association of PI-2b with CC17, which the pilus call is "
-                 "interpreted against",
+        supports="the pilus-island frequencies this module quotes (PI-1 70%, "
+                 "PI-2a 79%, PI-2b 21% of 898 human isolates, every isolate "
+                 "carrying at least one island and PI-2a and PI-2b summing to "
+                 "100%, so they are mutually exclusive), and the association "
+                 "of PI-2b with CC17, against which the pilus call is "
+                 "validated",
     ),
     Reference(
         key="Koide2022",
@@ -668,8 +877,60 @@ def fetch(db_dir: Path) -> None:
     _check_pbp2x(pbp)
     make_blast_db(pbp, "prot")
 
+    targets = root / "surface_targets.fna"
+    if not targets.exists():
+        LOG.info("%s: downloading the CDC GBS surface-gene target set", KEY)
+        download(CDC_SURFACE_URL, targets)
+        (root / "surface_targets.version").write_text(
+            f"{_github_commit(CDC_SURFACE_REPO, 'master')}\t{CDC_SURFACE_URL}\n",
+            encoding="utf-8")
+    _check_surface_targets(targets)
+    make_blast_db(targets, "nucl")
+
+    alleles = root / "alp_alleles.fna"
+    if not alleles.exists():
+        LOG.info("%s: downloading the %d published alpha-like protein alleles",
+                 KEY, len(ALP_ALLELES))
+        download("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
+                 "?db=nuccore&rettype=fasta&retmode=text&id="
+                 + ",".join(a for a, _g, _s, _r in ALP_ALLELES), alleles)
+    _check_alp_alleles(alleles)
+    make_blast_db(alleles, "nucl")
+
     LOG.info("%s: building the surface-protein panel from RefSeq annotation", KEY)
     fetch_panel(PANEL, PANEL_SOURCES, root, name="panel")
+
+
+def _check_surface_targets(path: Path) -> None:
+    """Verify the CDC target set still holds the targets the rules name.
+
+    The alp and pilus calls are nothing but these targets and the thresholds
+    applied to them, so if upstream renames or drops one the module fails here
+    rather than silently reporting a member or an island as absent.
+    """
+    found = {_cdc_target_of(name): len(seq) for name, seq in read_fasta(path)}
+    missing = sorted((set(ALP_TARGETS) | set(PILUS_TARGETS)) - set(found))
+    if missing:
+        raise HydraError(
+            f"{path.name} is missing the CDC target(s) {', '.join(missing)}; "
+            f"it holds {', '.join(sorted(found))}. The alp and pilus rules "
+            f"name these targets, so the module will not type without them")
+    short = sorted(t for t in ALP_TARGETS if found[t] < 400)
+    if short:
+        raise HydraError(
+            f"the CDC alp target(s) {', '.join(short)} are shorter than the "
+            f"400 bp the discriminating-window rule assumes: "
+            + ", ".join(f"{t} is {found[t]} bp" for t in short))
+
+
+def _check_alp_alleles(path: Path) -> None:
+    """Verify every published allele arrived, since one names alp4 on its own."""
+    got = {name.split()[0] for name, _seq in read_fasta(path)}
+    missing = [a for a, _g, _s, _r in ALP_ALLELES if a not in got]
+    if missing:
+        raise HydraError(
+            f"{path.name} is missing the published allele(s) "
+            f"{', '.join(missing)}; it holds {', '.join(sorted(got))}")
 
 
 def _check_pbp2x(path: Path) -> None:
@@ -703,10 +964,15 @@ def _check_pbp2x(path: Path) -> None:
 
 def _sbg_commit() -> str:
     """The commit the capsular reference was taken at, since there is no tag."""
+    return _github_commit("swainechen/GBS-SBG", "main")
+
+
+def _github_commit(repo: str, ref: str) -> str:
+    """The commit a reference file was taken at, for repositories with no tags."""
     import json  # noqa: PLC0415 - only fetch() needs it
     import urllib.request  # noqa: PLC0415
 
-    url = "https://api.github.com/repos/swainechen/GBS-SBG/commits/main"
+    url = f"https://api.github.com/repos/{repo}/commits/{ref}"
     try:
         request = urllib.request.Request(
             url, headers={"User-Agent": "hydra-amr",
@@ -736,10 +1002,13 @@ def run(assembly: Path, db_dir: Path, *, threads: int = 1,
 def _run_in(assembly: Path, root: Path, work: Path,
             threads: int) -> list[TypingResult]:
     results = [_call_cps(assembly, root, work, threads)]
+    targets = _screen_targets(assembly, root, work, threads)
+    alp = _call_alp(assembly, root, work, threads, targets)
     panel_fasta = root / "panel.faa"
     if not panel_fasta.exists():
         note = (f"the surface-protein panel is not installed under {root}; "
                 f"run the module's fetch() first")
+        results.append(alp)
         for scheme in ("sag_surface", "sag_pilus", "sag_markers"):
             results.append(TypingResult(scheme=scheme, call="not determined",
                                         note=note))
@@ -748,8 +1017,9 @@ def _run_in(assembly: Path, root: Path, work: Path,
     hits, _every = screen_panel(assembly, panel_fasta, work, PANEL,
                                 threads=threads, tag=KEY)
     manifest = panel_manifest(root, "panel")
-    results.append(_call_surface(hits, manifest))
-    results.append(_call_pilus(hits))
+    results.append(alp)
+    results.append(_call_surface(hits, manifest, alp))
+    results.append(_call_pilus(hits, root, targets))
     results.append(_call_markers(hits, manifest, results[0]))
     results.append(_call_pbp2x(assembly, root, work, threads))
     return results
@@ -1093,8 +1363,237 @@ def _base_serotype(name: str) -> str:
     return name.split("-", 1)[0] if name.startswith("III-") else name
 
 
+# ------------------------------------------- the CDC surface-gene target screen
+class _Target:
+    """One CDC target, with its best alignment and its covered extent."""
+
+    def __init__(self, sseqid: str, slen: int) -> None:
+        self.name = _cdc_target_of(sseqid)
+        self.sseqid = sseqid
+        self.slen = slen
+        self.identity = 0.0
+        self.bitscore = 0.0
+        self.contig = ""
+        self.start = 0
+        self.end = 0
+        self._spans: list[tuple[int, int]] = []
+
+    def add(self, hsp) -> None:
+        low, high = sorted((hsp.sstart, hsp.send))
+        self._spans.append((low, high))
+        if hsp.bitscore > self.bitscore:
+            self.bitscore = hsp.bitscore
+            self.identity = hsp.pident
+            self.contig = hsp.qseqid
+            self.start, self.end = hsp.qstart, hsp.qend
+
+    @property
+    def coverage(self) -> float:
+        """Percent of the target covered by the union of its alignments."""
+        covered = 0
+        end = 0
+        for low, high in sorted(self._spans):
+            if high <= end:
+                continue
+            covered += high - max(low, end + 1) + 1
+            end = high
+        return 100.0 * covered / self.slen if self.slen else 0.0
+
+    @property
+    def passes(self) -> bool:
+        return (self.coverage >= CDC_MIN_COVERAGE
+                and self.identity >= CDC_MIN_IDENTITY)
+
+    def evidence(self) -> str:
+        return (f"{self.coverage:.0f}% of the {self.slen} bp target at "
+                f"{self.identity:.1f}% identity, {self.contig}:"
+                f"{self.start}-{self.end}")
+
+
+def _cdc_target_of(sseqid: str) -> str:
+    """``12__ALP1__ALP1-1__12`` -> ``ALP1``.
+
+    The CDC file uses the SRST2 header convention, whose second field is the
+    cluster (target) name; the third is the allele within it.
+    """
+    parts = sseqid.split("__")
+    return parts[1] if len(parts) > 1 else sseqid
+
+
+def _screen_targets(assembly: Path, root: Path, work: Path,
+                    threads: int) -> dict[str, _Target] | None:
+    """Every CDC target the assembly carries, best alignment per target."""
+    fasta = root / "surface_targets.fna"
+    if not fasta.exists():
+        return None
+    check_db_exists(fasta, "nucl")
+    work.mkdir(parents=True, exist_ok=True)
+    # The alp targets are 516-620 bp and the pilus targets 60 bp, so the
+    # default blastn megablast word size would miss a diverged pilus window.
+    hsps = blast("blastn", assembly, fasta, work / "surface.blastn.tsv",
+                 threads=threads, evalue=1e-5, task="blastn",
+                 max_target_seqs=10000)
+    targets: dict[str, _Target] = {}
+    for hsp in hsps:
+        entry = targets.setdefault(_cdc_target_of(hsp.sseqid),
+                                   _Target(hsp.sseqid, hsp.slen))
+        entry.add(hsp)
+    return targets
+
+
+def _target_version(root: Path) -> str:
+    stamp = root / "surface_targets.version"
+    if stamp.exists():
+        return stamp.read_text(encoding="utf-8").split("\t")[0].strip()
+    return "version not recorded"
+
+
+# ------------------------------------------ the alpha-like protein family member
+def _call_alp(assembly: Path, root: Path, work: Path, threads: int,
+              targets: dict[str, _Target] | None) -> TypingResult:
+    """Name the alpha-like protein family member the isolate carries."""
+    database = f"CDC GBS surface-gene target set ({_target_version(root)})"
+    if targets is None:
+        return TypingResult(
+            scheme="sag_alp", call="not determined", loci_total=1,
+            note=f"the CDC GBS surface-gene target set is not installed under "
+                 f"{root}; run the module's fetch() first")
+
+    alp = {name: t for name, t in targets.items() if name in ALP_TARGETS}
+    passing = sorted((t for t in alp.values() if t.passes),
+                     key=lambda t: (t.identity, t.bitscore), reverse=True)
+    ranked = sorted(alp.values(), key=lambda t: (t.identity, t.bitscore),
+                    reverse=True)
+    closest = _closest_allele(assembly, root, work, threads)
+
+    alleles: dict[str, str] = {
+        "database": database,
+        "rule": (f"a CDC target names the member when at least "
+                 f"{CDC_MIN_COVERAGE:.0f}% of it aligns at no more than "
+                 f"{CDC_MAX_DIVERGENCE:.0f}% divergence, and beats the next "
+                 f"passing target by {ALP_MIN_MARGIN:.0f} percentage points of "
+                 f"identity"),
+        "closest_published_allele": closest or "not determined",
+        "all_targets": "; ".join(
+            f"{t.name} {t.coverage:.0f}%/{t.identity:.1f}%" for t in ranked
+        ) or "no CDC alp target aligned",
+    }
+
+    if not passing:
+        candidates = ", ".join(f"{t.name} ({t.identity:.1f}% identity over "
+                               f"{t.coverage:.0f}% of the target)"
+                               for t in ranked[:3])
+        detected = bool(ranked)
+        alleles["evidence"] = candidates or "no alignment to any CDC alp target"
+        note = (
+            f"not determined: no CDC alp target reached "
+            f"{CDC_MIN_COVERAGE:.0f}% coverage at "
+            f"{CDC_MIN_IDENTITY:.0f}% identity. "
+            + (f"The closest were {candidates}. " if detected else "")
+            + "An alpha-like protein gene whose discriminating window is this "
+              "far from all four targets is either alp4, which the CDC set "
+              "does not cover, or a recombinant; the closest_published_allele "
+              "field says which deposited allele it resembles. Check the "
+              "sag_surface call: if a family gene is present there and no "
+              "member is named here, the gene is real and the member is not "
+              "one the target set resolves")
+        return TypingResult(
+            scheme="sag_alp",
+            call="not determined" if detected else "no alpha-like protein gene "
+                                                   "detected",
+            lineage="-", alleles=alleles,
+            loci_found=0, loci_total=1, note=note)
+
+    best = passing[0]
+    runner = passing[1] if len(passing) > 1 else None
+    margin = best.identity - runner.identity if runner else 100.0
+    member, meaning = ALP_TARGETS[best.name]
+    alleles["cdc_target"] = best.name
+    alleles["evidence"] = best.evidence()
+    alleles["margin"] = (
+        f"{margin:.1f} percentage points of identity over the next passing "
+        f"target ({runner.name} at {runner.identity:.1f}%)" if runner
+        else "no other CDC alp target passed the threshold")
+
+    if margin < ALP_MIN_MARGIN:
+        alleles["candidates"] = f"{best.name} or {runner.name}"
+        return TypingResult(
+            scheme="sag_alp", call="not determined", lineage="-",
+            alleles=alleles, loci_found=0, loci_total=1,
+            note=f"not determined: {best.name} and {runner.name} both pass the "
+                 f"CDC threshold and are only {margin:.1f} percentage points "
+                 f"apart, below the {ALP_MIN_MARGIN:.0f}-point margin this "
+                 f"module requires. The members are mosaics of one another, so "
+                 f"naming one on this margin would be a guess; the isolate "
+                 f"carries one of {best.name} or {runner.name}, or a "
+                 f"recombinant of them")
+
+    alleles["meaning"] = meaning
+    notes = [f"named from the CDC {best.name} target, {best.evidence()}"]
+    if best.name == "ALP23":
+        notes.append(
+            "alp2 and alp3 are reported together: they are mosaics of each "
+            "other and differ by three bases in 620 inside this window, so the "
+            "window cannot separate them. closest_published_allele says which "
+            "of the two deposited sequences the window matches, as evidence "
+            "only, not as a call")
+    if best.name in ("ALPHA", "RIB"):
+        notes.append(
+            "the AlpN vaccine candidate is built from the N-terminal domains "
+            "of the alpha-C protein and Rib, so this member is the homotypic "
+            "target of that candidate")
+    else:
+        notes.append(
+            "Alp1, Alp2 and Alp3 share the N-terminal domains the AlpN "
+            "candidate is built from, so heterotypic cross-reactivity is "
+            "expected but is not a homotypic match")
+    notes.append("the member is named from a short window in the "
+                 "member-specific N-terminal region, never from the whole "
+                 "gene, because the members differ mostly by repeat number")
+    return TypingResult(
+        scheme="sag_alp", call=member, lineage="-", alleles=alleles,
+        loci_found=1, loci_total=1, note="; ".join(notes))
+
+
+def _closest_allele(assembly: Path, root: Path, work: Path,
+                    threads: int) -> str:
+    """The published allele the isolate's alp region resembles most.
+
+    Reported as a second opinion and as the only way *alp4* can be named, since
+    the CDC target set does not cover it. The comparison is restricted to the
+    single best alignment per allele: summing alignments would rank the alleles
+    by how many tandem repeats they share with the isolate, which is exactly
+    the failure the CDC windows exist to avoid.
+    """
+    fasta = root / "alp_alleles.fna"
+    if not fasta.exists():
+        return ""
+    check_db_exists(fasta, "nucl")
+    hsps = blast("blastn", assembly, fasta, work / "alp_alleles.blastn.tsv",
+                 threads=threads, evalue=1e-20, task="blastn",
+                 max_target_seqs=10000)
+    best: dict[str, tuple[float, float, int]] = {}
+    for hsp in hsps:
+        accession = hsp.sseqid.split()[0]
+        prior = best.get(accession)
+        if prior is None or hsp.bitscore > prior[0]:
+            best[accession] = (hsp.bitscore, hsp.pident, hsp.length)
+    if not best:
+        return ""
+    genes = {a: (g, s) for a, g, s, _r in ALP_ALLELES}
+    ranked = sorted(best.items(), key=lambda kv: kv[1][0], reverse=True)
+    out = []
+    for accession, (_bits, pident, length) in ranked[:2]:
+        gene, strain = genes.get(accession, (accession, ""))
+        where = f" from {strain}" if strain else ""
+        out.append(f"{gene} ({accession}{where}) at {pident:.1f}% identity "
+                   f"over {length} bp")
+    return "; ".join(out)
+
+
 # --------------------------------------------------------- surface and markers
-def _call_surface(hits: dict[str, GeneHit], manifest: dict) -> TypingResult:
+def _call_surface(hits: dict[str, GeneHit], manifest: dict,
+                  alp: TypingResult) -> TypingResult:
     """The alpha-like protein family, reported as a family."""
     unresolved = set(manifest.get("unresolved") or ())
     alleles: dict[str, str] = {}
@@ -1120,26 +1619,19 @@ def _call_surface(hits: dict[str, GeneHit], manifest: dict) -> TypingResult:
             f"{hit.accession} ({spec.product}) at {hit.identity_pct:.1f}% aa "
             f"identity over {hit.coverage_pct:.0f}% of {hit.ref_len} aa, on "
             f"{hit.contig}:{hit.start}-{hit.end}")
-        alleles["alp_family_member"] = (
-            "not determined: rib, alp1/epsilon, alp2, alp3 and alp4 share their "
-            "N-terminal domain and repeat units, and no versioned allele set is "
-            "published, so the family member is not named")
+        alleles["alp_family_member"] = alp.call
         named.append("alp-family")
     else:
         alleles["alp_family"] = "not detected"
-        alleles["alp_family_member"] = (
-            "not determined: no alpha-like protein family gene was detected. "
-            "Even when one is, the member is not named, because rib, "
-            "alp1/epsilon, alp2, alp3 and alp4 share their N-terminal domain "
-            "and repeat units and no versioned allele set is published")
+        alleles["alp_family_member"] = alp.call
 
     call = "+".join(named) if named else "none detected"
     notes = [
         "bca and bac carry large tandem repeats whose number varies between "
         "strains, so reference coverage well below 100% is normal and is not a "
         "lesion",
-        "the alpha-like protein family member is not named; see the "
-        "alp_family_member field for why",
+        "the alpha-like protein family member is named in the sag_alp call, "
+        "from the CDC discriminating windows, not from this protein panel",
     ]
     return TypingResult(
         scheme="sag_surface", call=call, lineage="-", alleles=alleles,
@@ -1147,8 +1639,9 @@ def _call_surface(hits: dict[str, GeneHit], manifest: dict) -> TypingResult:
     )
 
 
-def _call_pilus(hits: dict[str, GeneHit]) -> TypingResult:
-    """The pilus island profile: PI-2a by name, the other locus unnamed."""
+def _call_pilus(hits: dict[str, GeneHit], root: Path,
+                targets: dict[str, _Target] | None) -> TypingResult:
+    """The pilus island profile, each island named PI-1, PI-2a or PI-2b."""
     alleles: dict[str, str] = {}
     pi2a_genes = ("pilA", "pilB", "pilC", "srtC4")
     other_genes = ("pilus_backbone_2", "pilus_backbone_3", "srtC1", "srtC2")
@@ -1162,33 +1655,84 @@ def _call_pilus(hits: dict[str, GeneHit]) -> TypingResult:
     other = [g for g in other_genes
              if (h := hits.get(g)) is not None and h.present]
 
-    islands: list[str] = []
-    if len(pi2a) >= 2:
-        islands.append("PI-2a")
-    if len(other) >= 2:
-        islands.append("a second pilus island (not named)")
-    alleles["PI-2a"] = (f"present ({'+'.join(pi2a)})" if len(pi2a) >= 2
-                        else f"not detected (genes found: "
-                             f"{'+'.join(pi2a) or 'none'})")
-    alleles["second_island"] = (
-        f"present ({'+'.join(other)}); PI-1 and PI-2b share the SpaH/EbpB "
-        f"backbone and the class C sortases in the RefSeq annotation used here, "
-        f"so this locus is detected but not assigned to PI-1 or PI-2b"
-        if len(other) >= 2
-        else f"not detected (genes found: {'+'.join(other) or 'none'})")
+    alleles["PI-2a_operon_genes"] = (
+        f"{'+'.join(pi2a)} (RefSeq protein panel)" if pi2a else "none detected")
+    alleles["second_locus_operon_genes"] = (
+        f"{'+'.join(other)} (RefSeq protein panel; the SpaH/EbpB backbone and "
+        f"class C sortases shared by PI-1 and PI-2b)" if other
+        else "none detected")
+
     notes = [
-        "PI-1 and PI-2b are not distinguished: RefSeq annotates the backbone of "
-        "both as a SpaH/EbpB family major pilin, and no versioned reference set "
-        "that separates them is downloadable, so naming one from a best BLAST "
-        "hit would be a guess",
-        "PI-2a and PI-2b occupy the same chromosomal locus and are mutually "
-        "exclusive, so an isolate carrying PI-2a does not carry PI-2b",
+        "PI-2a and PI-2b are variants of one island at one chromosomal locus, "
+        "so an isolate carries one of the two and never both; PI-1 sits on a "
+        "separate mobile element and is independent of them",
+        "among 898 human GBS isolates PI-1 was found in 70%, PI-2a in 79% and "
+        "PI-2b in 21%, and every isolate carried at least one island "
+        "(Martins 2013), which is the expectation a profile is read against",
     ]
+
+    if targets is None:
+        alleles["islands"] = "not determined (CDC target set not installed)"
+        return TypingResult(
+            scheme="sag_pilus", call="not determined", lineage="-",
+            alleles=alleles, loci_found=len(pi2a) + len(other),
+            loci_total=len(PILUS),
+            note=f"the CDC GBS surface-gene target set is not installed under "
+                 f"{root}, so the islands are detected but not named; run the "
+                 f"module's fetch() first")
+
+    #: Each island is named by the CDC targets that pass, which are short
+    #: windows unique to that island; the RefSeq operon genes above are the
+    #: corroborating evidence, not the call.
+    hit_by_island: dict[str, list[_Target]] = {}
+    for name, island in PILUS_TARGETS.items():
+        target = targets.get(name)
+        if target is not None and target.passes:
+            hit_by_island.setdefault(island, []).append(target)
+    for name in sorted(PILUS_TARGETS):
+        target = targets.get(name)
+        alleles[f"target_{name}"] = (
+            f"{'present' if target.passes else 'below threshold'} - "
+            f"{target.evidence()}" if target is not None else "not detected")
+
+    islands = sorted(hit_by_island)
+    for island in islands:
+        found = hit_by_island[island]
+        alleles[island] = (
+            f"present; {'+'.join(t.name for t in found)} at "
+            + ", ".join(t.evidence() for t in found)
+            + f". {PILUS_MEANING[island]}")
+    for island in ("PI-1", "PI-2a", "PI-2b"):
+        alleles.setdefault(island, "not detected")
+
+    if "PI-2a" in islands and "PI-2b" in islands:
+        alleles["uncertainty"] = (
+            "both PI-2a and PI-2b targets passed, which the published "
+            "one-locus, two-variants structure of the island says cannot "
+            "happen in one isolate")
+        return TypingResult(
+            scheme="sag_pilus", call="not determined", lineage="-",
+            alleles=alleles, loci_found=len(hit_by_island),
+            loci_total=len(PILUS_TARGETS),
+            note="not determined: PI-2a and PI-2b are variants of one island "
+                 "at one locus and are mutually exclusive, yet targets for "
+                 "both passed. Either the assembly is a mixture of two "
+                 "isolates or a contig has been mis-joined; the island is not "
+                 "named. " + "; ".join(notes))
+
+    if not islands:
+        alleles["uncertainty"] = (
+            "no CDC pilus target passed, which is unusual: every one of 898 "
+            "human isolates carried at least one island (Martins 2013)")
+    notes.append("each island is named from a 60 bp CDC window unique to it; "
+                 "a window that short is a presence call and says nothing "
+                 "about whether the whole operon is intact, so the RefSeq "
+                 "operon genes are reported beside it")
     return TypingResult(
         scheme="sag_pilus",
         call=" + ".join(islands) if islands else "no pilus island detected",
         lineage="-", alleles=alleles,
-        loci_found=len(pi2a) + len(other), loci_total=len(PILUS),
+        loci_found=len(islands), loci_total=3,
         note="; ".join(notes),
     )
 

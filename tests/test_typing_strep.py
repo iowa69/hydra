@@ -479,18 +479,204 @@ def test_a_missing_core_regulator_is_not_determined_not_absent():
     assert "report as not determined" in result.note
 
 
-def test_the_alp_family_member_is_declared_undetermined_with_the_reason():
+def test_the_surface_call_takes_the_alp_member_from_the_alp_call():
+    """The protein panel never names the member; it quotes the sag_alp call."""
     hits = {spec.name: GeneHit(spec=spec) for spec in sagalactiae.PANEL}
-    result = sagalactiae._call_surface(hits, {"genes": {}, "unresolved": []})
-    assert result.alleles["alp_family_member"].startswith("not determined")
-    assert "allele set" in result.alleles["alp_family_member"]
+    alp = sagalactiae.TypingResult(scheme="sag_alp", call="rib")
+    result = sagalactiae._call_surface(hits, {"genes": {}, "unresolved": []},
+                                       alp)
+    assert result.alleles["alp_family_member"] == "rib"
+    assert "named in the sag_alp call" in result.note
 
 
-def test_the_second_pilus_island_is_not_named_pi1_or_pi2b():
+def test_the_pilus_islands_are_not_named_without_the_cdc_target_set(tmp_path):
     hits = {spec.name: GeneHit(spec=spec) for spec in sagalactiae.PANEL}
-    result = sagalactiae._call_pilus(hits)
-    assert "PI-1 and PI-2b are not distinguished" in result.note
+    result = sagalactiae._call_pilus(hits, tmp_path, None)
+    assert result.call == "not determined"
+    assert "run the module's fetch() first" in result.note
+
+
+# -------------------------------------------- the alpha-like protein member
+def _alp_db(root: Path, targets: dict[str, str],
+            alleles: tuple[tuple[str, str], ...] = ()) -> None:
+    """Build a miniature CDC target set and allele file under ``root``."""
+    from hydra_amr.seqio import write_fasta
+
+    root.mkdir(parents=True, exist_ok=True)
+    records = [(f"{i}__{name}__{name}-1__{i}", seq)
+               for i, (name, seq) in enumerate(targets.items(), start=1)]
+    write_fasta(root / "surface_targets.fna", records)
+    strep_common.make_blast_db(root / "surface_targets.fna", "nucl")
+    (root / "surface_targets.version").write_text("testcommit\thttp://example.invalid\n")
+    write_fasta(root / "alp_alleles.fna", list(alleles) or [("M97256.1 bca", "A" * 60)])
+    strep_common.make_blast_db(root / "alp_alleles.fna", "nucl")
+
+
+#: Four 516 bp windows that differ enough to stand in for the CDC targets.
+def _window(seed: int) -> str:
+    import random
+
+    rng = random.Random(seed)
+    return "".join(rng.choice("ACGT") for _ in range(516))
+
+
+@needs_blast
+def test_a_single_passing_cdc_target_names_the_alp_member(tmp_path):
+    from hydra_amr.seqio import write_fasta
+
+    root = tmp_path / "db" / sagalactiae.KEY
+    windows = {name: _window(i) for i, name in enumerate(sagalactiae.ALP_TARGETS)}
+    _alp_db(root, windows)
+    assembly = tmp_path / "isolate.fna"
+    filler = "ATGCATGCGT" * 200
+    write_fasta(assembly, [("contig_1", filler + windows["RIB"] + filler)])
+
+    result = sagalactiae._call_alp(assembly, root, tmp_path / "w1", 1,
+                                   sagalactiae._screen_targets(
+                                       assembly, root, tmp_path / "w1", 1))
+    assert result.call == "rib"
+    assert result.alleles["cdc_target"] == "RIB"
+    assert "100.0% identity" in result.alleles["evidence"]
+    assert "CC17" in result.alleles["meaning"]
+    assert "AlpN" in result.note
+
+
+@needs_blast
+def test_alp2_and_alp3_are_always_reported_as_a_pair(tmp_path):
+    from hydra_amr.seqio import write_fasta
+
+    root = tmp_path / "db" / sagalactiae.KEY
+    windows = {name: _window(i) for i, name in enumerate(sagalactiae.ALP_TARGETS)}
+    _alp_db(root, windows)
+    assembly = tmp_path / "isolate.fna"
+    write_fasta(assembly, [("contig_1", "ATGCATGCGT" * 200 + windows["ALP23"])])
+
+    result = sagalactiae._call_alp(assembly, root, tmp_path / "w2", 1,
+                                   sagalactiae._screen_targets(
+                                       assembly, root, tmp_path / "w2", 1))
+    assert result.call == "alp2/alp3"
+    assert "mosaics of each other" in result.note
+    assert "three bases in 620" in result.note
+
+
+@needs_blast
+def test_a_member_too_far_from_every_target_is_not_determined(tmp_path):
+    """An alp4 isolate, or a recombinant: named candidates, never a guess."""
+    from hydra_amr.seqio import write_fasta
+
+    root = tmp_path / "db" / sagalactiae.KEY
+    windows = {name: _window(i) for i, name in enumerate(sagalactiae.ALP_TARGETS)}
+    _alp_db(root, windows,
+            alleles=(("AJ488912.1 alp4", _window(99)),))
+    # A window built by mutating RIB every fifth base: 80% identity, which
+    # clears the e-value but fails the 92% floor.
+    diverged = list(windows["RIB"])
+    for i in range(0, len(diverged), 5):
+        diverged[i] = {"A": "C", "C": "A", "G": "T", "T": "G"}[diverged[i]]
+    assembly = tmp_path / "isolate.fna"
+    write_fasta(assembly, [("contig_1", "ATGCATGCGT" * 200 + "".join(diverged))])
+
+    result = sagalactiae._call_alp(assembly, root, tmp_path / "w3", 1,
+                                   sagalactiae._screen_targets(
+                                       assembly, root, tmp_path / "w3", 1))
+    assert result.call in ("not determined",
+                           "no alpha-like protein gene detected")
+    assert "alp4" in result.note
+    assert "recombinant" in result.note
+
+
+@needs_blast
+def test_two_targets_within_the_margin_are_reported_as_candidates(tmp_path):
+    """The safety belt: a near-tie is two candidates, not the winner's name."""
+    from hydra_amr.seqio import write_fasta
+
+    root = tmp_path / "db" / sagalactiae.KEY
+    base = _window(7)
+    sibling = list(base)
+    for i in range(0, len(sibling), 120):          # ~1% apart
+        sibling[i] = {"A": "C", "C": "A", "G": "T", "T": "G"}[sibling[i]]
+    windows = {"RIB": base, "ALPHA": "".join(sibling),
+               "ALP1": _window(11), "ALP23": _window(12)}
+    _alp_db(root, windows)
+    assembly = tmp_path / "isolate.fna"
+    write_fasta(assembly, [("contig_1", "ATGCATGCGT" * 200 + base)])
+
+    result = sagalactiae._call_alp(assembly, root, tmp_path / "w4", 1,
+                                   sagalactiae._screen_targets(
+                                       assembly, root, tmp_path / "w4", 1))
+    assert result.call == "not determined"
+    assert result.alleles["candidates"] in ("RIB or ALPHA", "ALPHA or RIB")
+    assert "would be a guess" in result.note
+
+
+@needs_blast
+def test_pi2a_and_pi2b_together_is_reported_as_impossible(tmp_path):
+    """One locus, two variants: both passing means the assembly is wrong."""
+    from hydra_amr.seqio import write_fasta
+
+    root = tmp_path / "db" / sagalactiae.KEY
+    windows = {name: _window(i) for i, name in enumerate(sagalactiae.ALP_TARGETS)}
+    windows["PI2A1"] = _window(40)[:60]
+    windows["PI2B"] = _window(41)[:60]
+    for name in sagalactiae.PILUS_TARGETS:
+        windows.setdefault(name, _window(hash(name) % 1000)[:60])
+    _alp_db(root, windows)
+    assembly = tmp_path / "isolate.fna"
+    write_fasta(assembly, [("contig_1", "ATGCATGCGT" * 100 + windows["PI2A1"]
+                            + "ATGCATGCGT" * 100 + windows["PI2B"]
+                            + "ATGCATGCGT" * 100)])
+
+    hits = {spec.name: GeneHit(spec=spec) for spec in sagalactiae.PANEL}
+    result = sagalactiae._call_pilus(
+        hits, root, sagalactiae._screen_targets(assembly, root,
+                                                tmp_path / "w5", 1))
+    assert result.call == "not determined"
     assert "mutually exclusive" in result.note
+    assert "mixture of two" in result.note
+
+
+def test_the_cdc_target_header_is_parsed_to_the_cluster_name():
+    assert sagalactiae._cdc_target_of("13__ALP23__ALP23-1__13") == "ALP23"
+    assert sagalactiae._cdc_target_of("2__PI1__PI1-1__2") == "PI1"
+
+
+def test_every_cdc_target_the_rules_name_has_a_meaning():
+    for name in sagalactiae.PILUS_TARGETS.values():
+        assert name in sagalactiae.PILUS_MEANING
+    for member, meaning in sagalactiae.ALP_TARGETS.values():
+        assert member and meaning
+
+
+def test_a_missing_cdc_target_fails_the_fetch_check(tmp_path):
+    from hydra_amr.seqio import write_fasta
+
+    path = tmp_path / "surface_targets.fna"
+    write_fasta(path, [("1__RIB__RIB-1__1", "A" * 522)])
+    with pytest.raises(sagalactiae.HydraError) as excinfo:
+        sagalactiae._check_surface_targets(path)
+    assert "ALP23" in str(excinfo.value)
+
+
+def test_a_truncated_alp_target_fails_the_fetch_check(tmp_path):
+    from hydra_amr.seqio import write_fasta
+
+    write_fasta(tmp_path / "t.fna",
+                [(f"{i}__{name}__{name}-1__{i}", "A" * 100)
+                 for i, name in enumerate(
+                     list(sagalactiae.ALP_TARGETS) +
+                     list(sagalactiae.PILUS_TARGETS), start=1)])
+    with pytest.raises(sagalactiae.HydraError) as excinfo:
+        sagalactiae._check_surface_targets(tmp_path / "t.fna")
+    assert "shorter than" in str(excinfo.value)
+
+
+def test_a_missing_published_allele_fails_the_fetch_check(tmp_path):
+    from hydra_amr.seqio import write_fasta
+
+    write_fasta(tmp_path / "a.fna", [("M97256.1 bca", "A" * 60)])
+    with pytest.raises(sagalactiae.HydraError) as excinfo:
+        sagalactiae._check_alp_alleles(tmp_path / "a.fna")
+    assert "U58333.1" in str(excinfo.value)
 
 
 def test_a_capsular_genotype_is_never_presented_as_a_serotype_by_serology():
@@ -586,6 +772,66 @@ SPYOGENES_PANEL = {
                         "which RefSeq also calls a pseudogene"),
     "GCF_000230295.1": ("Alab49", "emm53.0", "D4", "no lesion",
                         "emmtyper 0.2.0"),
+}
+
+#: *S. agalactiae*: accession -> (expected alpha-like protein member, expected
+#: pilus islands, where the expectation comes from). The strongest expectations
+#: are the two strains the published allele was *deposited from*: M97256.1
+#: (bca) comes from A909 and U58333.1 (rib) from BM110, so for those two the
+#: expectation is the defining sequence itself. For 2603V/R, 18RS21, H36B and
+#: GB-NI-002 the expectation is the gene name in that strain's own genome-paper
+#: annotation. For the rest no published per-strain assignment was found and
+#: the expectation is the published lineage association or the rule the profile
+#: must obey; those rows say so.
+SAGALACTIAE_ALP = {
+    "GCF_000012705.1": ("bca (alpha-C protein)", ("PI-1", "PI-2b"),
+                        "Michel 1992: bca was cloned and deposited from A909 "
+                        "(M97256.1), so the deposited sequence IS the "
+                        "expectation; no published pilus profile found"),
+    "GCF_900155855.1": ("rib", ("PI-1", "PI-2b"),
+                        "Wastfelt 1996: rib was cloned and deposited from "
+                        "BM110 (U58333.1); PI-2b from the published CC17 "
+                        "association (Martins 2013)"),
+    "GCF_030489705.1": ("rib", ("PI-1", "PI-2b"),
+                        "CC17 prototype: rib and PI-2b are the published CC17 "
+                        "surface profile (Martins 2013; Da Cunha 2014)"),
+    "GCF_000007265.1": ("rib", ("PI-1", "PI-2a"),
+                        "Tettelin 2002: SAG0433 is annotated \"surface "
+                        "protein Rib\" in the 2603V/R genome paper; no "
+                        "published pilus profile found"),
+    "GCA_000167715.1": ("rib", ("PI-1", "PI-2a"),
+                        "Tettelin 2005: SAJ_0543 is annotated \"rib protein\" "
+                        "in the 18RS21 genome; no published pilus profile"),
+    "GCA_000167795.1": ("bca (alpha-C protein)", ("PI-2a",),
+                        "Tettelin 2005: SAI_0471 is annotated \"c protein "
+                        "alpha-antigen precursor\" in the H36B genome; no "
+                        "published pilus profile found"),
+    "GCF_001217725.1": ("bca (alpha-C protein)", ("PI-2a",),
+                        "the GB-NI-002 genome annotation names the gene bca, "
+                        "\"C protein alpha-antigen\" (ERS039697_00779); no "
+                        "published pilus profile found"),
+    "GCF_000196055.1": ("alp2/alp3", ("PI-1", "PI-2a"),
+                        "no published per-strain alp assignment found: the "
+                        "expectation is that NEM316 is NOT rib and NOT bca, "
+                        "since the RIB target reaches 68% and the ALPHA "
+                        "target 78% identity while ALP23 reaches 99.5%"),
+    "GCA_001010335.1": ("alp2/alp3", ("PI-1", "PI-2a"),
+                        "no published per-strain assignment; the automated "
+                        "product name in the record says \"surface protein "
+                        "Rib\" and the sequence contradicts it - see the "
+                        "disagreement in docs/typing/strep.md"),
+    "GCA_001015895.1": ("bca (alpha-C protein)", ("PI-2a",),
+                        "no published per-strain assignment; reported as "
+                        "observed, with the mutual-exclusivity rule as the "
+                        "only check"),
+    "GCA_001016915.1": ("bca (alpha-C protein)", ("PI-2a",),
+                        "no published per-strain assignment; reported as "
+                        "observed, with the mutual-exclusivity rule as the "
+                        "only check"),
+    "GCF_000427055.1": ("no alpha-like protein gene detected", ("PI-2b",),
+                        "the negative case: a tilapia serotype VI isolate "
+                        "outside the human lineages; no alp-family gene is "
+                        "expected and none may be invented"),
 }
 
 #: *S. agalactiae*: accession -> (strain, expected capsular genotype, CC17
@@ -684,6 +930,60 @@ def test_sagalactiae_validation_panel(accession, validation_root):
     # No validation genome is a reduced-penicillin-susceptibility isolate.
     assert "V405A" not in results["sag_pbp2x"].call
     assert "Q557E" not in results["sag_pbp2x"].call
+
+    # The alpha-like protein member and the pilus islands.
+    member, islands, _source = SAGALACTIAE_ALP[accession]
+    assert results["sag_alp"].call == member, f"{strain}: alp member"
+    assert results["sag_surface"].alleles["alp_family_member"] == member
+    pilus = results["sag_pilus"]
+    assert pilus.call == " + ".join(islands), f"{strain}: pilus, got {pilus.call}"
+    # The published structure of the island: one locus, two variants.
+    assert not ("PI-2a" in islands and "PI-2b" in islands)
+
+
+@needs_validation
+@needs_blast
+@pytest.mark.parametrize("accession", sorted(SAGALACTIAE_ALP))
+def test_every_genome_carries_exactly_one_of_pi2a_and_pi2b(accession,
+                                                           validation_root):
+    """Martins 2013: PI-2a (79%) and PI-2b (21%) sum to 100% of 898 human
+    isolates, because they are two variants of one island at one locus. Every
+    genome must therefore carry exactly one of them - a rule the call can be
+    held to even where no per-strain profile is published.
+    """
+    assembly = _download_assembly(accession, validation_root / "genomes")
+    results = {r.scheme: r
+               for r in sagalactiae.run(assembly, validation_root / "db",
+                                        threads=4)}
+    call = results["sag_pilus"].call
+    assert ("PI-2a" in call) != ("PI-2b" in call), f"{accession}: {call}"
+
+
+@needs_validation
+@needs_blast
+def test_the_alp_member_is_named_on_a_wide_margin_not_a_narrow_one(
+        validation_root):
+    """The family members differ mostly by repeat number, so the call is only
+    worth making if the discriminating window separates them widely. On A909,
+    whose bca is the deposited reference, the winner must clear every other
+    target by a wide margin.
+    """
+    assembly = _download_assembly("GCF_000012705.1",
+                                  validation_root / "genomes")
+    results = {r.scheme: r
+               for r in sagalactiae.run(assembly, validation_root / "db",
+                                        threads=4)}
+    alp = results["sag_alp"]
+    assert alp.alleles["cdc_target"] == "ALPHA"
+    # Every non-winning target, from the all_targets field, stays far below.
+    others = [part for part in alp.alleles["all_targets"].split("; ")
+              if not part.startswith("ALPHA ")]
+    assert others
+    for part in others:
+        identity = float(part.rsplit("/", 1)[1].rstrip("%"))
+        assert identity < 80.0, part
+    assert "bca (M97256.1 from A909) at 100.0% identity" in \
+        alp.alleles["closest_published_allele"]
 
 
 @needs_validation
