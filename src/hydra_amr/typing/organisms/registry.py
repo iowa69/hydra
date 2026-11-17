@@ -580,5 +580,15 @@ def headline(results: Iterable[TypingResult]) -> str:
             if found is None:
                 continue
             call = str(found.call or "-")
-            parts.append(f"{prefix} {call}" if prefix else call)
+            if prefix:
+                parts.append(f"{prefix} {call}")
+            elif call.startswith("not determined"):
+                # Without a prefix a bare "not determined" says nothing about
+                # which call is missing, and this line is often all a reader
+                # sees, so the scheme names itself.
+                label = (SCHEME_TITLES_BY_MODULE.get((key, scheme))
+                         or SCHEME_TITLES.get(scheme, scheme))
+                parts.append(f"{label}: {call}")
+            else:
+                parts.append(call)
     return " \u00b7 ".join(parts)

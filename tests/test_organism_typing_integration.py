@@ -486,7 +486,15 @@ def test_the_headline_names_what_the_typing_concluded():
     undetermined = registry.relabel([
         TypingResult(scheme="salmonella_serovar", call="not determined")],
         organism="Salmonella enterica", key="salmonella")
-    assert registry.headline(undetermined) == "not determined"
+    assert registry.headline(undetermined) == (
+        "Serovar (antigenic formula): not determined")
+    # A prefixed scheme keeps the prefix, undetermined or not.
+    missing_spa = registry.relabel(
+        [TypingResult(scheme="spa", call="not determined"),
+         TypingResult(scheme="clonal_complex", call="not determined")],
+        organism="Staphylococcus aureus", key="saureus")
+    assert registry.headline(missing_spa) == (
+        "spa not determined \u00b7 MLST clonal complex: not determined")
 
 
 def test_the_headline_ignores_the_species_independent_schemes():
