@@ -154,6 +154,36 @@ def test_installed_needs_at_least_one_declared_database(tmp_path):
     assert entry.missing_databases(tmp_path) == ["spa", "mlst"]
 
 
+def test_a_completion_stamp_is_named_for_every_module_that_has_one():
+    """A stamp makes fetch() return at once; shipping one with a partial copy
+    would stop the missing part ever being downloaded."""
+    import ast as _ast
+
+    root = Path(__file__).resolve().parents[1] / "src" / "hydra_amr" / "typing" / "organisms"
+    for key in sorted(registry.modules()):
+        source = (root / f"{key}.py").read_text()
+        tree = _ast.parse(source)
+        early = False
+        for node in tree.body:
+            if isinstance(node, _ast.FunctionDef) and node.name == "fetch":
+                early = any(isinstance(sub, _ast.Return) and sub.value is None
+                            for sub in _ast.walk(node))
+        assert bool(registry.DB_STAMPS.get(key)) == early, (
+            f"{key}: fetch() {'returns early' if early else 'does not return early'}, "
+            f"but DB_STAMPS says {registry.DB_STAMPS.get(key)}")
+
+
+def test_a_partial_copy_leaves_the_completion_stamp_out(tmp_path):
+    root = tmp_path / "hinfluenzae"
+    (root / "ftsI").mkdir(parents=True)
+    (root / "ftsI" / "ftsI.faa").write_text(">x\nMM\n")
+    (root / "version.json").write_text('{"version": "1"}')
+    entry = registry.get("hinfluenzae")
+    assert [p.name for p in entry.stamp_files(tmp_path)] == ["version.json"]
+    assert [p.name for p in entry.provenance_files(tmp_path)] == ["version.json"]
+    assert entry.provenance_files(tmp_path, complete=False) == []
+
+
 def test_every_declared_database_has_a_layout_entry():
     """A name is not a path: the modules do not share a layout.
 

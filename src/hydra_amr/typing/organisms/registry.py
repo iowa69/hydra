@@ -226,6 +226,17 @@ DB_PROVENANCE: dict[str, tuple[str, ...]] = {
     "spyogenes": (),
 }
 
+#: Files whose presence makes a module's ``fetch()`` return immediately,
+#: treating the install as complete. They are completion stamps, not data, and
+#: a packager that ships only part of a module's databases must leave them out:
+#: with the stamp present the first-launch download sees "already installed"
+#: and never fetches the rest. Only these two modules have one -- the other six
+#: guard per file, so a missing database is still fetched.
+DB_STAMPS: dict[str, tuple[str, ...]] = {
+    "hinfluenzae": ("version.json",),
+    "nmeningitidis": ("version.json",),
+}
+
 #: Download caches a module keeps so a re-fetch does not re-download. They are
 #: the largest thing in two of these trees (12 MB of RefSeq protein FASTA for
 #: *S. pyogenes*) and nothing reads them at run time, so a packaged copy leaves
@@ -300,9 +311,22 @@ class OrganismModule:
                     out.append(path)
         return out
 
-    def provenance_files(self, db_dir: Path | str) -> list[Path]:
+    def provenance_files(self, db_dir: Path | str, complete: bool = True) -> list[Path]:
+        """The small files recording where this module's data came from.
+
+        With *complete* false the completion stamps are left out, because a
+        partial copy that carries one would never be completed: see
+        :data:`DB_STAMPS`.
+        """
         root = self.root(db_dir)
-        return [root / name for name in DB_PROVENANCE.get(self.key, ())
+        names = list(DB_PROVENANCE.get(self.key, ()))
+        if not complete:
+            names = [n for n in names if n not in DB_STAMPS.get(self.key, ())]
+        return [root / name for name in names if (root / name).is_file()]
+
+    def stamp_files(self, db_dir: Path | str) -> list[Path]:
+        root = self.root(db_dir)
+        return [root / name for name in DB_STAMPS.get(self.key, ())
                 if (root / name).is_file()]
 
     def cache_dirs(self, db_dir: Path | str) -> list[Path]:
