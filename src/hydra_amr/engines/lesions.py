@@ -33,7 +33,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping, Sequence
 
-from ..records import Hit, MutationDetail
+from ..records import CONTIG_END_RESOLUTION, CONTIG_END_SUBTYPE, Hit, MutationDetail
 from ..seqio import read_fasta_subset
 from ..utils import LOG, revcomp, translate
 
@@ -82,7 +82,8 @@ TYPE_LABELS = {
     "disruption_start": "Gene disruption: start codon lost",
     "disruption_5prime": "Gene disruption: 5' part of the gene absent",
     "disruption_unresolved": "Gene disruption: lesion not resolved",
-    "contig_end": "Gene cut by a contig end (NOT evidence of disruption)",
+    "contig_end": ("Gene cut by a contig end: NOT evidence of disruption, "
+                   "loss of function not assessed"),
     "divergent": "Divergent (mosaic) allele",
 }
 
@@ -103,6 +104,49 @@ def resistance_text(drug_class: str, subclass: str, *, loss_of_function: bool = 
     else:
         text = f"{words(sub or cls)} resistance"
     return text + ("; loss of function" if loss_of_function else "")
+
+
+#: What a contig-end row is marked as, in the row's own columns.
+#:
+#: A gene running off the end of a contig is still reported -- suppressing the
+#: call would hide a real finding behind an assembly artefact, and the reader
+#: would never learn the gene was there. What the row must never do is pass for
+#: a confirmed loss of function, and a disclosure that lives only in a note
+#: column is a disclosure the reader may never reach. So the element subtype
+#: and the resolution carry it too, in columns no view drops.
+#: Re-exported from :mod:`hydra_amr.records`, which holds the vocabulary of
+#: the row columns these two values go into.
+__all_contig_end__ = (CONTIG_END_SUBTYPE, CONTIG_END_RESOLUTION)
+
+
+def disclose_contig_end(hit: Hit) -> bool:
+    """Mark a row whose gene turned out to be cut by a contig end.
+
+    Called after the lesion has been read from the assembly, which is the first
+    moment anything knows that the "disruption" is an assembly boundary. Three
+    things have to be visible: that the gene runs off the end of the contig,
+    that this is not evidence of disruption, and that loss of function could not
+    be assessed. The resistance field stops asserting a loss of function that
+    was never established, and says what the finding would mean if it were.
+
+    Returns whether the row was marked, so a caller can count them.
+    """
+    detail = hit.mutation
+    if detail is None or detail.call_type != "contig_end":
+        return False
+    hit.element_subtype = CONTIG_END_SUBTYPE
+    hit.resolution = CONTIG_END_RESOLUTION
+    disclosure = (f"{hit.gene} runs off the end of contig {hit.sequence}, so the gene is cut "
+                  f"by the assembly: this is NOT evidence of disruption and loss of function "
+                  f"could not be assessed. Reported rather than suppressed, but it is not a "
+                  f"confirmed loss-of-function call")
+    hit.note = f"{disclosure}. The call it was reported from: {hit.note}" if hit.note \
+        else disclosure
+    would_be = resistance_text(hit.drug_class, hit.subclass)
+    detail.resistance = ("loss of function not established: the gene is cut by a contig end"
+                         + (f", so the {would_be} a confirmed loss of function would mean "
+                            f"cannot be reported" if would_be else ""))
+    return True
 
 
 def infer_reference_codon(observed: str, ref_aa: str) -> list[str]:
@@ -1228,5 +1272,7 @@ def describe_mutations(hits: Sequence[Hit], assembly: Path | str | None,
                                           type_label="Not described",
                                           unresolved=f"description failed: {exc}")
         hit.evidence = None
+        # A gene cut by a contig end is kept, and the row is made to say so.
+        disclose_contig_end(hit)
         done += hit.mutation is not None
     return done

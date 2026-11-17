@@ -22,7 +22,7 @@ from pathlib import Path
 
 from ..config import Config
 from ..db.manager import DatabaseStore
-from ..records import Hit, SpeciesCall, TypingResult
+from ..records import CONTIG_END_RESOLUTION, Hit, SpeciesCall, TypingResult
 from ..utils import LOG
 from ..engines.blast import blast, check_db_exists, merge_hsps
 from ..engines.nucl import QueryBatch
@@ -369,6 +369,11 @@ def _has_class(hits: list[Hit], *, drug_class: str = "", subclass: str = "",
                gene_prefix: str = "") -> bool:
     for hit in hits:
         if hit.element_type != "AMR":
+            continue
+        # A gene cut by a contig end is reported, but its loss of function was
+        # never established, so it cannot carry a score that says resistance is
+        # present. The row stays; only this derived flag ignores it.
+        if hit.resolution == CONTIG_END_RESOLUTION:
             continue
         if drug_class and drug_class.upper() in (hit.drug_class or "").upper():
             return True

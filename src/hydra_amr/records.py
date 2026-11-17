@@ -91,6 +91,16 @@ class MutationDetail:
 _NO_MUTATION = {key: "" for key in MutationDetail().as_row()}
 
 
+#: ``Hit.resolution`` and ``Hit.element_subtype`` for a gene that turned out to
+#: be cut by a contig end. The call is kept -- a gene running off the end of a
+#: contig is a real finding -- but the row has to say in its own columns that
+#: this is not evidence of disruption and that loss of function could not be
+#: assessed, so that no view of the row can read as a confirmed loss-of-function
+#: call. :func:`hydra_amr.engines.lesions.disclose_contig_end` sets them.
+CONTIG_END_RESOLUTION = "CONTIG_END"
+CONTIG_END_SUBTYPE = "DISRUPTION_AT_CONTIG_END"
+
+
 @dataclass
 class Hit:
     """One detected element in one sample.
@@ -121,7 +131,10 @@ class Hit:
     depth: float | None = None            # read mode
     allele_fraction: float | None = None  # read mode / heteroresistance
     method: str = "BLASTN"
-    resolution: str = "COMPLETE"          # COMPLETE | PARTIAL | POINT | INTERNAL_STOP
+    #: COMPLETE | PARTIAL | POINT | INTERNAL_STOP | CONTIG_END. CONTIG_END says
+    #: the gene is cut by the end of its contig, so whatever lesion the
+    #: alignment suggested was not established; see CONTIG_END_RESOLUTION.
+    resolution: str = "COMPLETE"
     #: False when another database already reported this same locus. Redundant
     #: hits stay in the long table but are excluded from counts and matrices.
     primary: bool = True

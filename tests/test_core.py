@@ -1360,6 +1360,49 @@ def test_porins_need_a_higher_identity_floor_than_mgrb():
     assert loss_of_function_call("ompK35", "Klebsiella_pneumoniae", 74.7, 100.0)
 
 
+def test_pmrb_and_acrr_are_in_the_catalogue_with_the_calls_the_tools_make():
+    """Two calls the reference tools make that Hydra used to miss.
+
+    Kleborate reports a 1 bp insertion in HS11286's pmrB as
+    ``pmrB:p.Gly20fs``; AMRFinderPlus reports EC958's acrR frameshift as
+    ``acrR_F180LfsTer3``. Neither was a deliberate exclusion -- the engine
+    already knew Kleborate's name for the pmrB locus and the catalogue already
+    curates substitutions in both genes -- the genes were simply absent from
+    this table, so no genome could ever produce the call. Adding them closes
+    that gap generally: the rule is per organism, as every rule here is, and
+    nothing in it names a genome.
+    """
+    from hydra_amr.engines.protein import LOSS_OF_FUNCTION
+
+    # pmrB: the sensor kinase of PmrAB, scoped to the complex Kleborate types.
+    assert LOSS_OF_FUNCTION["pmrB"]["class"] == "COLISTIN"
+    assert LOSS_OF_FUNCTION["pmrB"]["subclass"] == "COLISTIN"
+    assert loss_of_function_call("pmrB", "Klebsiella_pneumoniae", 60.0, 99.0)
+    assert loss_of_function_call("pmrB", "Klebsiella_variicola", 60.0, 99.0)
+    # The catalogue curates pmrB substitutions for four more taxgroups, but a
+    # loss-of-function call has not been validated in them, so it must not fire.
+    for elsewhere in ("Escherichia", "Salmonella", "Pseudomonas_aeruginosa",
+                      "Acinetobacter_baumannii"):
+        assert not loss_of_function_call("pmrB", elsewhere, 60.0, 99.0), elsewhere
+
+    # acrR: the AcrAB-TolC repressor, with the class the AMRFinderPlus mutation
+    # catalogue gives acrR for this taxgroup, so a broken acrR is annotated
+    # exactly as a catalogued substitution in acrR would be.
+    assert LOSS_OF_FUNCTION["acrR"]["class"] == "MULTIDRUG"
+    assert LOSS_OF_FUNCTION["acrR"]["subclass"] == (
+        "AMPICILLIN/CHLORAMPHENICOL/FLUOROQUINOLONE/RIFAMPIN/TETRACYCLINE")
+    assert loss_of_function_call("acrR", "Escherichia", 83.3, 100.0)
+    # Not in Klebsiella: the catalogue curates acrR there under tigecycline, but
+    # ramR already covers that pathway and the call is not validated for it.
+    assert not loss_of_function_call("acrR", "Klebsiella_pneumoniae", 83.3, 100.0)
+
+    # Both need a porin-grade identity floor: acrR sits in the TetR/AcrR family
+    # alongside ramR and envR, and pmrB alongside the other sensor kinases.
+    for gene in ("pmrB", "acrR"):
+        assert LOSS_OF_FUNCTION[gene]["min_identity"] == 90.0, gene
+        assert not loss_of_function_call(gene, "Klebsiella_pneumoniae", 60.0, 58.0)
+
+
 def test_every_loss_of_function_rule_is_organism_scoped_and_classed():
     from hydra_amr.engines.protein import LOSS_OF_FUNCTION
     for gene, rule in LOSS_OF_FUNCTION.items():

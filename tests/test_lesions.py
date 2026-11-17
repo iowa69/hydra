@@ -13,10 +13,11 @@ import random
 
 from hydra_amr.engines.blast import Hsp
 from hydra_amr.engines.lesions import (CODE, describe_disruption, describe_dna,
-                                       describe_protein, infer_reference_codon)
+                                       describe_mutations, describe_protein,
+                                       disclose_contig_end, infer_reference_codon)
 from hydra_amr.engines.mutations import MutationEntry
 from hydra_amr.engines.nucl import QueryPiece
-from hydra_amr.records import Hit
+from hydra_amr.records import CONTIG_END_RESOLUTION, CONTIG_END_SUBTYPE, Hit
 from hydra_amr.utils import revcomp
 
 RNG = random.Random(7)
@@ -351,6 +352,103 @@ def test_gene_cut_by_a_contig_end_is_not_called_a_disruption():
         assert "NOT evidence" in detail.type_label
         assert "not evidence" in detail.description
         assert "PARTIAL_CONTIG_END" in detail.description
+
+
+def test_a_contig_end_call_is_disclosed_in_the_row_and_never_suppressed():
+    """The row itself has to say it, not only a note column a reader may miss.
+
+    Three things must be visible: the gene runs off the end of the contig, that
+    is not evidence of disruption, and loss of function could not be assessed.
+    And the call stays: suppressing it would hide a real finding.
+    """
+    gene = cds_for(LOF)
+    contig, top = place(gene[:210], "+", right=0)
+    hsp = lof_hsp(top, "+", 1, 70, LOF, 0)
+    lo, hi = sorted((hsp.qstart, hsp.qend))
+    hit = lof_hit("c1", lo, hi, "+")
+    hit.note = "ompK35 truncated: longest aligned stretch covers 23% of the reference"
+    hit.mutation = describe_disruption(hit, lof_evidence([hsp], hsp), {"c1": contig}, None)
+
+    assert disclose_contig_end(hit) is True
+    # The columns a reader scans, not just the description.
+    assert hit.element_subtype == CONTIG_END_SUBTYPE
+    assert hit.resolution == CONTIG_END_RESOLUTION
+    assert "DISRUPTION_AT_CONTIG_END" == hit.element_subtype
+    for required in ("runs off the end of contig c1", "NOT evidence of disruption",
+                     "loss of function could not be assessed"):
+        assert required in hit.note, required
+    assert "not a confirmed loss-of-function call" in hit.note
+    # The call is still there, with its original reason kept.
+    assert "23% of the reference" in hit.note
+    assert hit.gene == "ompK35" and hit.mutation is not None
+    # The resistance field must not assert a loss of function that was never
+    # established; it may say what one would mean.
+    assert "not established" in hit.mutation.resistance
+    assert not hit.mutation.resistance.startswith("carbapenem resistance")
+
+
+def test_disclosure_leaves_a_real_lesion_alone():
+    """Only a contig end is marked; a genuine frameshift keeps its own row."""
+    gene = cds_for(LOF)
+    cut = 3 * 40
+    isolate_cds = gene[:cut] + gene[cut + 1:]
+    contig, top = place(isolate_cds, "+")
+    hsp = lof_hsp(top, "+", 1, 40, LOF, 0)
+    lo, hi = sorted((hsp.qstart, hsp.qend))
+    hit = lof_hit("c1", lo, hi, "+")
+    hit.note = "ompK35 frameshifted: alignments at this locus change reading frame"
+    hit.mutation = describe_disruption(hit, lof_evidence([hsp], hsp), {"c1": contig}, None)
+    before = (hit.element_subtype, hit.resolution, hit.note)
+    assert hit.mutation.call_type != "contig_end"
+    assert disclose_contig_end(hit) is False
+    assert (hit.element_subtype, hit.resolution, hit.note) == before
+
+    # A hit with no mutation detail at all must not be touched either.
+    plain = lof_hit("c1", 1, 10, "+")
+    assert disclose_contig_end(plain) is False
+
+
+def test_describe_mutations_discloses_contig_ends_as_it_goes(tmp_path):
+    """The pipeline path: the row is marked where the lesion is read."""
+    gene = cds_for(LOF)
+    contig, top = place(gene[:210], "+", right=0)
+    assembly = tmp_path / "a.fna"
+    assembly.write_text(f">c1\n{contig}\n")
+    hsp = lof_hsp(top, "+", 1, 70, LOF, 0)
+    lo, hi = sorted((hsp.qstart, hsp.qend))
+    hit = lof_hit("c1", lo, hi, "+")
+    hit.note = "ompK35 truncated: longest aligned stretch covers 23% of the reference"
+    hit.evidence = lof_evidence([hsp], hsp)
+    assert describe_mutations([hit], assembly, None) == 1
+    assert hit.mutation.call_type == "contig_end"
+    assert hit.resolution == CONTIG_END_RESOLUTION
+    assert hit.element_subtype == CONTIG_END_SUBTYPE
+    # And it reaches the workbook row, in a column of its own.
+    row = hit.as_row()
+    assert row["element_subtype"] == CONTIG_END_SUBTYPE
+    assert row["resolution"] == CONTIG_END_RESOLUTION
+    assert "loss of function not assessed" in row["mutation_type"]
+
+
+def test_a_contig_end_row_does_not_raise_the_resistance_score_flags():
+    """Reported, but never counted as a confirmed determinant."""
+    from hydra_amr.typing.lineage import resistance_score
+
+    confirmed = Hit(sample="s", database="protein", gene="mgrB", element_type="AMR",
+                    drug_class="COLISTIN", subclass="COLISTIN",
+                    element_subtype="DISRUPTION", method="DISRUPTX", resolution="PARTIAL")
+    carbapenemase = Hit(sample="s", database="ncbi", gene="blaKPC-2", element_type="AMR",
+                        drug_class="BETA-LACTAM", subclass="CARBAPENEM")
+    _score, flags = resistance_score([carbapenemase, confirmed])
+    assert flags["colistin"] is True
+
+    at_edge = Hit(sample="s", database="protein", gene="mgrB", element_type="AMR",
+                  drug_class="COLISTIN", subclass="COLISTIN",
+                  element_subtype=CONTIG_END_SUBTYPE, method="DISRUPTX",
+                  resolution=CONTIG_END_RESOLUTION)
+    score, flags = resistance_score([carbapenemase, at_edge])
+    assert flags["colistin"] is False, "an unassessable lesion cannot score as resistance"
+    assert flags["carbapenemase"] is True and score == 2
 
 
 def test_missing_start_codon_region_is_located_not_guessed():
