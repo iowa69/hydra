@@ -20,7 +20,7 @@ from .. import __author__, __organisation__, __version__
 from ..records import SampleResult
 from ..utils import LOG
 from .tables import (class_summary, heteroresistance_table, long_table, matrix,
-                     mlst_table, summary_table, typing_table)
+                     mlst_table, mutation_table, summary_table, typing_table)
 
 _CSS = """
 :root{
@@ -336,6 +336,21 @@ def render(results: Sequence[SampleResult], *, cell: str = "binary",
         if not extra_matrix.empty and extra_matrix.shape[1]:
             parts.append(f"<h2>{_esc(element_type.title())} heatmap</h2>")
             parts.append(_heatmap(extra_matrix, cell, f"{element_type} {axis} ({cell})"))
+
+    mutations = mutation_table(results)
+    if not mutations.empty:
+        parts.append("<h2>Point mutations and gene disruptions: what changed</h2>")
+        parts.append('<div class="sub">Each call with the change spelled out: the codon or '
+                     'base the isolate carries (read from the assembly, or counted in the '
+                     'reads), where it is, and the resistance it is associated with. A '
+                     'reference codon marked inferred is a parsimony inference: the database '
+                     'has no reference coding sequence for that protein.</div>')
+        shown = mutations[mutations["primary"]] if "primary" in mutations else mutations
+        parts.append(_frame_to_html(shown[[
+            "sample", "mutation", "mutation_type", "protein_change_hgvs", "nucleotide_change",
+            "observed_codon", "reference_codon", "reference_codon_inferred",
+            "mutation_location", "intact_reference", "resistance", "kleborate_call",
+            "mutation_description", "unresolved"]], "tbl-mutations"))
 
     if not hetero.empty:
         parts.append("<h2>Heteroresistance and point mutations from reads</h2>")

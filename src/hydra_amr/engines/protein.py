@@ -409,6 +409,13 @@ class ProteinScreener:
                 method="DISRUPTX", resolution="PARTIAL",
                 note=(f"{gene} {reason}: {detail}; loss of function confers "
                       f"{rule['class'].lower()} resistance"),
+                # For engines/lesions.py, which names the lesion from the sequence.
+                evidence={"kind": "disruption", "hsp": hsp, "offset": piece.offset,
+                          "contig": piece.contig, "reason": reason,
+                          "reference": references.get(hsp.sseqid, ""),
+                          "pieces": [(h, batch.id_map[h.qseqid])
+                                     for (s, g, _contig), group in by_contig.items()
+                                     if s == sample and g == gene for h in group]},
             ))
         return out
 
@@ -635,6 +642,8 @@ class ProteinScreener:
                     identity_pct=hsp.pident, gaps=hsp.gaps, bitscore=hsp.bitscore,
                     method="POINTX", resolution="POINT",
                     note=f"{entry.symbol}" + (f" ({obs.observed})" if obs.observed else ""),
+                    evidence={"kind": "protein", "hsp": hsp, "offset": offset,
+                              "entry": entry, "position": entry.position},
                 ))
         for sample in out:
             out[sample].sort(key=lambda h: (h.gene, h.note))
@@ -711,8 +720,9 @@ class ProteinScreener:
             return {}
         threads = threads or self.config.threads
         thresholds = self.config.thresholds
-        reference_lengths = {header.split()[0]: len(seq)
-                             for header, seq in read_fasta(catalog.dna_reference)}
+        reference_seqs = {header.split()[0]: seq
+                          for header, seq in read_fasta(catalog.dna_reference)}
+        reference_lengths = {name: len(seq) for name, seq in reference_seqs.items()}
         LOG.info("screening %s DNA mutation loci (%d catalogued positions)",
                  organism, catalog.n_dna)
         out_tab = workdir / f"mutations.{organism}.blastn.tsv"
@@ -776,6 +786,10 @@ class ProteinScreener:
                     identity_pct=hsp.pident, gaps=hsp.gaps, bitscore=hsp.bitscore,
                     method="POINTN", resolution="POINT",
                     note=f"{entry.symbol}" + (f" ({obs.observed})" if obs.observed else ""),
+                    evidence={"kind": "dna", "hsp": hsp, "offset": offset, "entry": entry,
+                              "position": (entry.position if entry.position > 0
+                                           else reference_length + entry.position + 1),
+                              "reference": reference_seqs.get(sseqid, "")},
                 ))
         for sample in out:
             out[sample].sort(key=lambda h: (h.gene, h.note))

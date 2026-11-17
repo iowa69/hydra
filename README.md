@@ -299,10 +299,45 @@ ERR10447212   ecoh           SEROTYPE      SEROTYPE    wzm-O9                   
 
 Columns: `sample database element_type element_subtype gene accession product class
 subclass sequence start end strand coverage coverage_pct identity_pct gaps depth
-allele_fraction method resolution primary note`.
+allele_fraction method resolution primary note`, then, filled for point-mutation and
+gene-disruption calls only, the columns of `hydra.mutations.tsv` below (`mutation`
+to `unresolved`).
 
 `primary` marks the best hit per genomic locus, so a gene found by several databases
 counts once. `--report-overlaps` reports the rest as well.
+
+### `hydra.mutations.tsv` — what exactly mutated
+
+One row per point-mutation or gene-disruption call, the change spelled out first.
+For an assembly the codon (or base) is read from the contig at coordinates found by
+walking the alignment, so strand and indels upstream of the site are handled; from
+reads it is the base count at the reference position. Names follow AMRFinderPlus
+(`gyrA_S83I`, `mgrB_Q30Ter`, `cirA_Y253CfsTer5`), with HGVS alongside and
+Kleborate's call for the *K. pneumoniae* loci it types. Public genomes HS11286
+(*K. pneumoniae*) and EC958 (*E. coli*), seven of the columns:
+
+```
+sample   mutation             protein_change_hgvs  nucleotide_change                               observed_codon                                                       mutation_location                  kleborate_call
+HS11286  gyrA_S83I            p.Ser83Ile           c.248G>T (inferred)                             ATC                                                                  NC_016845.1:3738482-3738484 (-)    GyrA:p.Ser83Ile
+HS11286  ompK35_G134AfsTer11  p.Gly134AlafsTer12   c.401delG (inferred)                            new frame from codon 134 stops at TGA (NC_016845.1:1904952-1904954)  NC_016845.1:1904986-1904990 (-)    OmpK35:p.Trp133fs
+HS11286  cirA_N467MfsTer15    p.Asn467MetfsTer16   c.1398delG or c.1400delA (inferred, ambiguous)  new frame from codon 467 stops at TGA (NC_016845.1:3676673-3676675)  NC_016845.1:3676721 (-)
+EC958    gyrA_S83L            p.Ser83Leu           c.248C>T (inferred)                             TTG                                                                  NZ_HG941718.1:2536301-2536303 (-)
+```
+
+| Column | Meaning |
+|---|---|
+| `mutation` | AMRFinderPlus-style symbol; a disruption is named by its lesion (`ompK35_G134AfsTer11`) |
+| `mutation_type` | substitution, nonsense, in-frame insertion/deletion, rRNA or promoter base change, gene disruption (premature stop, frameshift, interrupted by inserted sequence, start codon lost, 5' part absent), *gene cut by a contig end (not evidence of disruption)*, divergent allele |
+| `protein_change`, `protein_change_hgvs` | `S83I` / `p.Ser83Ile`; for frameshifts AMRFinderPlus counts the residues before the stop (`fsTer11`) and HGVS counts the stop too (`fsTer12`) |
+| `nucleotide_change`, `nucleotide_change_basis` | `c.248C>T`, `n.2059A>G`; the basis says where the reference base comes from |
+| `observed_codon` | the isolate's codon or base, read from the assembly (or the read counts) |
+| `reference_codon` | the reference codon or base **from a reference sequence**: the DNA catalogue loci (rRNA, promoters) and, in reads mode, the reference gene |
+| `reference_codon_inferred` | AMRFinderPlus ships proteins, not coding sequences, for the point-mutation genes, so the reference codon of a protein mutation is the codon for the reference residue closest to the observed one: an inference, marked as such everywhere it is used |
+| `base_change` | `C>T at codon position 2`; for frameshifts the net indel (`net 1-bp deletion`) |
+| `mutation_location`, `gene_location` | the mutated codon/base on the contig, and the gene's span |
+| `intact_reference` | disruptions: how much of the reference protein is made before the lesion |
+| `resistance` | the resistance the call is associated with, in words |
+| `mutation_description`, `unresolved` | one plain sentence; anything that could not be resolved, said plainly |
 
 ### `hydra.matrix.tsv` — presence/absence, samples × genes
 

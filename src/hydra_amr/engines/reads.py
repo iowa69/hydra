@@ -26,6 +26,7 @@ from ..config import Config
 from ..db.manager import DatabaseStore
 from ..records import Hit
 from ..utils import LOG, HydraError, have, natural_key, require, run, translate
+from .lesions import describe_read_site, describe_read_variant
 from .mutations import MutationCatalog, reference_index
 
 #: Per-base sequencing error rate assumed by the minority-allele significance test.
@@ -597,18 +598,21 @@ class ReadMapper:
                         catalogued[entry.symbol.rsplit("_", 1)[-1].upper()] = entry
 
         def make(variant: Variant, entry, note: str, method: str) -> Hit:
+            drug_class = getattr(entry, "drug_class", "") or meta.get("class", "")
+            subclass = getattr(entry, "subclass", "") or meta.get("subclass", "")
             return Hit(
                 sample=sample, database=database, gene=gene,
                 accession=meta.get("accession", ""), product=meta.get("product", ""),
                 element_type=meta.get("element_type", "AMR"), element_subtype="POINT",
-                drug_class=getattr(entry, "drug_class", "") or meta.get("class", ""),
-                subclass=getattr(entry, "subclass", "") or meta.get("subclass", ""),
+                drug_class=drug_class, subclass=subclass,
                 sequence=consensus.reference, start=variant.position, end=variant.position,
                 strand="+", coverage=f"{variant.position}/{len(consensus.sequence)}",
                 coverage_pct=consensus.breadth,
                 identity_pct=reference_identity,
                 depth=float(variant.depth), allele_fraction=variant.allele_fraction,
                 method=method, resolution="POINT", note=note,
+                mutation=describe_read_variant(variant, entry, gene, reference_name,
+                                               drug_class, subclass),
             )
 
         called = consensus.called_bases or 1
@@ -645,6 +649,8 @@ class ReadMapper:
             summary.resolution = "ALLELE"
             summary.start, summary.end = 1, len(consensus.sequence)
             summary.allele_fraction = None
+            # A summary of many differences, not one mutation.
+            summary.mutation = None
             hits.append(summary)
         return hits
 
@@ -755,6 +761,7 @@ class ReadMapper:
                 else 100.0,
                 depth=float(call.depth), allele_fraction=call.allele_fraction,
                 method="POINTR", resolution="POINT", note=note,
+                mutation=describe_read_site(call, organism),
             ))
         return hits
 

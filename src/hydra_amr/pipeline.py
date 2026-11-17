@@ -11,6 +11,7 @@ from pathlib import Path
 from .config import Config
 from .db.manager import DatabaseStore
 from .db.registry import DATABASES
+from .engines.lesions import describe_mutations
 from .engines.mutations import MutationCatalog
 from .engines.nucl import NucleotideScreener, QueryBatch, build_query_batch
 from .engines.protein import ProteinScreener
@@ -184,6 +185,11 @@ class Pipeline:
             self._assembly_qc(assemblies, results)
             organism_by_sample = self._identify(batch, assemblies, results, workdir)
             self._screen_assemblies(batch, results, organism_by_sample, workdir)
+            # Name what exactly mutated, from each assembly's own sequence.
+            for sample, path in assemblies.items():
+                if sample in results:
+                    describe_mutations(results[sample].hits, path,
+                                       organism_by_sample.get(sample))
 
         if readsets:
             self._process_reads(readsets, results, organism_by_sample, workdir)

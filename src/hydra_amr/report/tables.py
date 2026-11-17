@@ -243,6 +243,33 @@ def element_table(results: Sequence[SampleResult]) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=list(ELEMENT_COLUMNS))
 
 
+#: The mutation table: what exactly changed at each mutation or disruption call,
+#: followed by where the call came from.
+MUTATION_TABLE_COLUMNS = (
+    "sample", "mutation", "mutation_type", "gene", "protein_change", "protein_change_hgvs",
+    "nucleotide_change", "observed_codon", "reference_codon", "reference_codon_inferred",
+    "base_change", "mutation_location", "gene_location", "intact_reference", "resistance",
+    "kleborate_call", "mutation_description", "nucleotide_change_basis", "unresolved",
+    "class", "subclass", "method", "identity_pct", "coverage_pct", "allele_fraction", "depth",
+    "primary",
+)
+
+
+def mutation_table(results: Sequence[SampleResult]) -> pd.DataFrame:
+    """One row per point-mutation or gene-disruption call, the change spelled out first."""
+    rows = []
+    for result in results:
+        for hit in result.hits:
+            if hit.mutation is None:
+                continue
+            row = hit.as_row()
+            rows.append({column: row.get(column, "") for column in MUTATION_TABLE_COLUMNS
+                         if column != "sample"} | {"sample": result.sample})
+    frame = pd.DataFrame(rows, columns=list(MUTATION_TABLE_COLUMNS))
+    return frame.sort_values(["sample", "gene", "mutation"], kind="stable").reset_index(drop=True) \
+        if not frame.empty else frame
+
+
 #: Methods whose hits belong in the heteroresistance view: a catalogued site
 #: measured from reads, or a read-derived variant that matched the catalogue.
 HETERORESISTANCE_METHODS = ("POINTR",)
@@ -268,7 +295,9 @@ def heteroresistance_table(results: Sequence[SampleResult],
             status = "heteroresistant" if "HETERORESISTANT" in hit.note.upper() else (
                 "fixed" if "FIXED" in hit.note.upper() else "detected")
             rows.append({
-                "sample": result.sample, "gene": hit.gene, "mutation": hit.note.split(";")[0],
+                "sample": result.sample, "gene": hit.gene,
+                "mutation": (hit.mutation.symbol if hit.mutation is not None
+                             and hit.mutation.symbol else hit.note.split(";")[0]),
                 "class": hit.drug_class, "subclass": hit.subclass,
                 "allele_fraction": round(hit.allele_fraction, 4),
                 "depth": hit.depth, "status": status, "reference": hit.sequence,
