@@ -106,17 +106,11 @@ def resistance_text(drug_class: str, subclass: str, *, loss_of_function: bool = 
     return text + ("; loss of function" if loss_of_function else "")
 
 
-#: What a contig-end row is marked as, in the row's own columns.
-#:
-#: A gene running off the end of a contig is still reported -- suppressing the
-#: call would hide a real finding behind an assembly artefact, and the reader
-#: would never learn the gene was there. What the row must never do is pass for
-#: a confirmed loss of function, and a disclosure that lives only in a note
-#: column is a disclosure the reader may never reach. So the element subtype
-#: and the resolution carry it too, in columns no view drops.
-#: Re-exported from :mod:`hydra_amr.records`, which holds the vocabulary of
-#: the row columns these two values go into.
-__all_contig_end__ = (CONTIG_END_SUBTYPE, CONTIG_END_RESOLUTION)
+#: What a contig-end row is marked as, in its own columns. Defined in
+#: :mod:`hydra_amr.records`, next to the two fields they are written into, and
+#: named here so a reader of this module can see what disclose_contig_end()
+#: sets without going to look.
+_CONTIG_END_COLUMNS = (CONTIG_END_SUBTYPE, CONTIG_END_RESOLUTION)
 
 
 def disclose_contig_end(hit: Hit) -> bool:
