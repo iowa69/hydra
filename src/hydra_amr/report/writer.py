@@ -13,7 +13,8 @@ from ..records import SampleResult
 from ..utils import LOG, HydraError
 from . import html as html_report
 from .tables import (class_summary, element_table, gene_table, heteroresistance_table,
-                     long_table, matrix, mlst_table, summary_table, typing_table)
+                     long_table, matrix, mlst_table, mutation_table, summary_table,
+                     typing_table)
 
 #: Suffixes used for each artefact, appended to the output prefix.
 ARTEFACTS = {
@@ -24,6 +25,7 @@ ARTEFACTS = {
     "mlst": ".mlst",
     "typing": ".typing",
     "hetero": ".heteroresistance",
+    "mutations": ".mutations",
     "genes": ".genes",
     "elements": ".elements",
 }
@@ -86,6 +88,7 @@ def write_outputs(results: Sequence[SampleResult], *, outdir: Path | None, prefi
         "mlst": mlst_table(results),
         "typing": typing_table(results),
         "hetero": heteroresistance_table(results),
+        "mutations": mutation_table(results),
     }
 
     for fmt in table_formats:

@@ -11,7 +11,94 @@ HIT_COLUMNS = (
     "product", "class", "subclass", "sequence", "start", "end", "strand",
     "coverage", "coverage_pct", "identity_pct", "gaps", "depth", "allele_fraction",
     "method", "resolution", "primary", "note",
+) + (
+    # What exactly mutated, for mutation and disruption calls (engines/lesions.py);
+    # empty for every other hit.
+    "mutation", "mutation_type", "protein_change", "protein_change_hgvs",
+    "nucleotide_change", "nucleotide_change_basis", "observed_codon", "reference_codon",
+    "reference_codon_inferred", "base_change", "mutation_location", "gene_location",
+    "intact_reference", "kleborate_call", "resistance", "mutation_description",
+    "unresolved",
 )
+
+
+@dataclass
+class MutationDetail:
+    """What exactly changed at a mutation or disruption call, read from the isolate.
+
+    Filled by :mod:`hydra_amr.engines.lesions` after the call is made; it never
+    affects which calls are made. Field by field:
+
+    ``symbol``             AMRFinderPlus-style name (``gyrA_S83I``, ``ompK35_G134AfsTer11``)
+    ``call_type``          machine-readable kind (substitution, nonsense, insertion, deletion,
+                           rRNA, promoter, disruption_frameshift, contig_end, divergent ...)
+    ``type_label``         the same in words
+    ``protein_change``     short form (``S83I``); ``protein_hgvs`` long form (``p.Ser83Ile``)
+    ``nucleotide_change``  HGVS-style (``c.248C>T``, ``n.2059A>G``)
+    ``nucleotide_basis``   where the reference base comes from: the reference sequence,
+                           or "inferred" by parsimony when the database has none
+    ``observed``           codon(s) or base read from the assembly
+    ``reference``          reference codon/base taken from a reference sequence
+    ``reference_inferred`` reference codon inferred by parsimony (never presented as fact)
+    ``base_change``        which base changed (``C>T at codon position 2``)
+    ``contig/start/end/strand``, ``location``  the mutated codon/base on the contig
+    ``gene_location``      the gene's span on the contig
+    ``intact``             disruptions: how much of the reference is intact
+    ``kleborate``          Kleborate v3's name for the same change, for the loci it types
+    ``resistance``         the resistance the call is associated with, in words
+    ``description``        one plain sentence
+    ``unresolved``         anything that could not be resolved, said plainly
+    """
+
+    symbol: str = ""
+    call_type: str = ""
+    type_label: str = ""
+    protein_change: str = ""
+    protein_hgvs: str = ""
+    nucleotide_change: str = ""
+    nucleotide_basis: str = ""
+    observed: str = ""
+    reference: str = ""
+    reference_inferred: str = ""
+    base_change: str = ""
+    contig: str = ""
+    start: int = 0
+    end: int = 0
+    strand: str = ""
+    location: str = ""
+    gene_location: str = ""
+    intact: str = ""
+    kleborate: str = ""
+    resistance: str = ""
+    description: str = ""
+    unresolved: str = ""
+
+    def as_row(self) -> dict[str, Any]:
+        return {
+            "mutation": self.symbol, "mutation_type": self.type_label,
+            "protein_change": self.protein_change, "protein_change_hgvs": self.protein_hgvs,
+            "nucleotide_change": self.nucleotide_change,
+            "nucleotide_change_basis": self.nucleotide_basis,
+            "observed_codon": self.observed, "reference_codon": self.reference,
+            "reference_codon_inferred": self.reference_inferred,
+            "base_change": self.base_change, "mutation_location": self.location,
+            "gene_location": self.gene_location, "intact_reference": self.intact,
+            "kleborate_call": self.kleborate, "resistance": self.resistance,
+            "mutation_description": self.description, "unresolved": self.unresolved,
+        }
+
+
+_NO_MUTATION = {key: "" for key in MutationDetail().as_row()}
+
+
+#: ``Hit.resolution`` and ``Hit.element_subtype`` for a gene that turned out to
+#: be cut by a contig end. The call is kept -- a gene running off the end of a
+#: contig is a real finding -- but the row has to say in its own columns that
+#: this is not evidence of disruption and that loss of function could not be
+#: assessed, so that no view of the row can read as a confirmed loss-of-function
+#: call. :func:`hydra_amr.engines.lesions.disclose_contig_end` sets them.
+CONTIG_END_RESOLUTION = "CONTIG_END"
+CONTIG_END_SUBTYPE = "DISRUPTION_AT_CONTIG_END"
 
 
 @dataclass
@@ -44,11 +131,19 @@ class Hit:
     depth: float | None = None            # read mode
     allele_fraction: float | None = None  # read mode / heteroresistance
     method: str = "BLASTN"
-    resolution: str = "COMPLETE"          # COMPLETE | PARTIAL | POINT | INTERNAL_STOP
+    #: COMPLETE | PARTIAL | POINT | INTERNAL_STOP | CONTIG_END. CONTIG_END says
+    #: the gene is cut by the end of its contig, so whatever lesion the
+    #: alignment suggested was not established; see CONTIG_END_RESOLUTION.
+    resolution: str = "COMPLETE"
     #: False when another database already reported this same locus. Redundant
     #: hits stay in the long table but are excluded from counts and matrices.
     primary: bool = True
     note: str = ""
+    #: What exactly mutated (mutation and disruption calls only); see MutationDetail.
+    mutation: MutationDetail | None = None
+    #: The alignment a mutation call was made from, kept only until
+    #: engines/lesions.py has described it. Never written out.
+    evidence: dict | None = field(default=None, repr=False, compare=False)
 
     def as_row(self) -> dict[str, Any]:
         return {
@@ -75,6 +170,7 @@ class Hit:
             "resolution": self.resolution,
             "primary": self.primary,
             "note": self.note,
+            **(self.mutation.as_row() if self.mutation is not None else _NO_MUTATION),
         }
 
 

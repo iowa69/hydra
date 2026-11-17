@@ -23,9 +23,12 @@ from .mutations import MutationCatalog, evaluate, multi_residue, walk_alignment
 from .nucl import QueryBatch
 
 
-#: The K. pneumoniae species complex, where every rule below is established.
+#: The K. pneumoniae species complex, where most rules below are established.
 _KPSC = {"Klebsiella_pneumoniae", "Klebsiella_oxytoca",
          "Klebsiella_variicola", "Klebsiella_quasipneumoniae"}
+#: The AMRFinderPlus taxgroup that covers E. coli and Shigella alike, which is
+#: how ``SpeciesIdentifier.organism_for_name`` maps both genera.
+_ESCHERICHIA = {"Escherichia"}
 
 #: Genes whose *loss* confers resistance, scoped to the organisms where that is
 #: established, with the drug class each carries in the AMRFinderPlus catalogue.
@@ -76,6 +79,39 @@ LOSS_OF_FUNCTION: dict[str, dict] = {
         "organisms": _KPSC,
         "class": "NITROFURAN/PHENICOL/QUINOLONE/TETRACYCLINE",
         "subclass": "NITROFURANTOIN/PHENICOL/QUINOLONE/TIGECYCLINE",
+        "intact_coverage": 90.0, "min_partial_coverage": 20.0, "min_identity": 90.0,
+    },
+    # pmrB is the sensor kinase of the PmrAB two-component system. Substitutions
+    # in it are catalogued (the table above already spells Kleborate's name for
+    # the locus), but breaking it is the same colistin mechanism and was not
+    # being reported: Kleborate calls the 1 bp insertion in HS11286
+    # `pmrB:p.Gly20fs` and Hydra found nothing there. It is a gap, not an
+    # exclusion -- nothing in the engine, the catalogue handling or the
+    # validation record says pmrB was left out on purpose.
+    #
+    # Scoped to the K. pneumoniae complex, where Kleborate establishes it. The
+    # AMRFinderPlus catalogue also curates pmrB substitutions for Escherichia,
+    # Salmonella, P. aeruginosa and A. baumannii, all under COLISTIN; those stay
+    # out until a loss-of-function call has been validated in them, because an
+    # organism gate is the one thing here that cannot be guessed.
+    "pmrB": {
+        "organisms": _KPSC, "class": "COLISTIN", "subclass": "COLISTIN",
+        "intact_coverage": 90.0, "min_partial_coverage": 20.0, "min_identity": 90.0,
+    },
+    # acrR represses the AcrAB-TolC efflux pump, so losing it derepresses the
+    # pump -- the same mechanism as ramR above, one step closer to the pump.
+    # AMRFinderPlus reports the EC958 frameshift as `acrR_F180LfsTer3`; Hydra
+    # reported nothing, again because the gene was simply absent from this
+    # table. Class and subclass are the ones the AMRFinderPlus mutation
+    # catalogue gives acrR for this taxgroup, so a loss of function is annotated
+    # exactly as a catalogued substitution in the same gene would be.
+    #
+    # The catalogue also curates acrR for K. pneumoniae, under tigecycline;
+    # left out for the same reason as pmrB's other taxgroups, and because ramR
+    # already covers that pathway there.
+    "acrR": {
+        "organisms": _ESCHERICHIA, "class": "MULTIDRUG",
+        "subclass": "AMPICILLIN/CHLORAMPHENICOL/FLUOROQUINOLONE/RIFAMPIN/TETRACYCLINE",
         "intact_coverage": 90.0, "min_partial_coverage": 20.0, "min_identity": 90.0,
     },
 }
@@ -409,6 +445,13 @@ class ProteinScreener:
                 method="DISRUPTX", resolution="PARTIAL",
                 note=(f"{gene} {reason}: {detail}; loss of function confers "
                       f"{rule['class'].lower()} resistance"),
+                # For engines/lesions.py, which names the lesion from the sequence.
+                evidence={"kind": "disruption", "hsp": hsp, "offset": piece.offset,
+                          "contig": piece.contig, "reason": reason,
+                          "reference": references.get(hsp.sseqid, ""),
+                          "pieces": [(h, batch.id_map[h.qseqid])
+                                     for (s, g, _contig), group in by_contig.items()
+                                     if s == sample and g == gene for h in group]},
             ))
         return out
 
@@ -635,6 +678,8 @@ class ProteinScreener:
                     identity_pct=hsp.pident, gaps=hsp.gaps, bitscore=hsp.bitscore,
                     method="POINTX", resolution="POINT",
                     note=f"{entry.symbol}" + (f" ({obs.observed})" if obs.observed else ""),
+                    evidence={"kind": "protein", "hsp": hsp, "offset": offset,
+                              "entry": entry, "position": entry.position},
                 ))
         for sample in out:
             out[sample].sort(key=lambda h: (h.gene, h.note))
@@ -711,8 +756,9 @@ class ProteinScreener:
             return {}
         threads = threads or self.config.threads
         thresholds = self.config.thresholds
-        reference_lengths = {header.split()[0]: len(seq)
-                             for header, seq in read_fasta(catalog.dna_reference)}
+        reference_seqs = {header.split()[0]: seq
+                          for header, seq in read_fasta(catalog.dna_reference)}
+        reference_lengths = {name: len(seq) for name, seq in reference_seqs.items()}
         LOG.info("screening %s DNA mutation loci (%d catalogued positions)",
                  organism, catalog.n_dna)
         out_tab = workdir / f"mutations.{organism}.blastn.tsv"
@@ -776,6 +822,10 @@ class ProteinScreener:
                     identity_pct=hsp.pident, gaps=hsp.gaps, bitscore=hsp.bitscore,
                     method="POINTN", resolution="POINT",
                     note=f"{entry.symbol}" + (f" ({obs.observed})" if obs.observed else ""),
+                    evidence={"kind": "dna", "hsp": hsp, "offset": offset, "entry": entry,
+                              "position": (entry.position if entry.position > 0
+                                           else reference_length + entry.position + 1),
+                              "reference": reference_seqs.get(sseqid, "")},
                 ))
         for sample in out:
             out[sample].sort(key=lambda h: (h.gene, h.note))
