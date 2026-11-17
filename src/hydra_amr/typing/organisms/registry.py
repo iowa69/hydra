@@ -62,62 +62,177 @@ SCHEME_TITLES: dict[str, str] = {
     "spa": "spa type (Ridom)",
     "agr": "agr group",
     "clonal_complex": "MLST clonal complex",
-    "sccmec": "SCCmec type",
-    "pvl": "Panton-Valentine leucocidin",
+    "pvl": "Panton-Valentine leucocidin (lukS/lukF-PV)",
     "tst": "Toxic shock toxin (tst)",
     "enterotoxins": "Enterotoxin gene repertoire",
     "haemolysins": "Haemolysin gene repertoire",
     "hlb": "beta-haemolysin (hlb) status",
-    "capsule": "Capsule serotype locus",
-    "iec": "Immune evasion cluster",
+    "iec": "Immune evasion cluster (IEC type)",
     "acme": "Arginine catabolic mobile element",
-    "bla": "beta-lactamase locus",
+    "blaZ": "blaZ penicillinase",
+    "bla_operon": "blaZ operon (blaZ/blaR1/blaI)",
+    "capsule": "Capsule serotype (cap locus)",
+    "saureus": "S. aureus typing",
     # Streptococcus pyogenes
     "emm": "emm type (M protein)",
-    "emm_virulome": "Virulence gene repertoire",
+    "emm_virulome": "Virulence and superantigen repertoire",
     "spy_prophage": "Prophage content",
     "spy_regulators": "Regulatory loci",
     "spy_adhesins": "Adhesins",
     # Streptococcus agalactiae
-    "cps": "Capsular serotype",
-    "alp": "Alpha-like protein (Alp) type",
+    "sag_alp": "Alpha-like protein (Alp) type",
     "sag_surface": "Surface protein repertoire",
     "sag_pilus": "Pilus island type",
     "sag_markers": "Marker gene repertoire",
     "sag_pbp2x": "PBP2X substitutions",
     # Streptococcus pneumoniae
-    "serotype": "Capsular serotype",
+    "cps_serotype": "Capsular serotype",
     "pbp_type": "PBP type (1A:2B:2X)",
     "beta_lactam_mic": "Predicted beta-lactam MIC",
-    "spn_resistance": "Non-beta-lactam resistance determinants",
-    "spn_pili": "Pilus islets",
-    "spn_mlst": "MLST",
-    # Haemophilus influenzae / Neisseria meningitidis
-    "capsule_type": "Capsule type",
-    "serogroup": "Capsule serogroup",
+    "target_substitutions": "Resistance target substitutions",
+    "macrolide_mechanism": "Macrolide resistance mechanism",
+    "other_determinants": "Other resistance determinants",
+    "pilus_islets": "Pilus islets",
+    # Haemophilus influenzae
+    "cap": "Capsule type (cap locus)",
     "pbp3": "PBP3 (ftsI) substitution pattern",
     "beta_lactam": "beta-lactam interpretation",
+    # Neisseria meningitidis
     "finetype": "Fine type",
-    "bast": "Bexsero antigen sequence type",
+    "bast": "Bexsero antigen sequence type (BAST)",
+    "amr_alleles": "Resistance target alleles",
+    # shared by more than one module, so resolved per module below
+    "cps": "Capsule locus",
     "mlst": "MLST",
-    "amr": "Resistance determinants",
     # Salmonella
-    "serovar": "Serovar (antigenic formula)",
+    "salmonella_serovar": "Serovar (antigenic formula)",
+    "salmonella_subspecies": "Subspecies",
+    "salmonella_h2_locus": "H2 (fljB) locus",
+    "salmonella_spi": "Pathogenicity islands",
     "salmonella_mlst": "MLST / eBurst group",
-    "antigens": "Antigenic formula",
-    "spi": "Pathogenicity islands",
-    "markers": "Marker gene repertoire",
+    "salmonella_virulence_plasmid": "Virulence plasmid",
+    "salmonella_typhoidal": "Typhoidal markers",
     # Escherichia coli / Shigella
     "phylogroup": "Phylogroup (Clermont)",
-    "fimh": "fimH allele",
-    "st131_subclone": "ST131 subclone",
+    "fimH": "fimH allele (FimTyper)",
+    "ST131_subclone": "ST131 subclone",
     "stx": "Shiga toxin subtype",
     "pathotype": "Pathotype",
     "intimin": "Intimin (eae) subtype",
+    "ExPEC_VF": "ExPEC / UPEC virulence factors",
     "shigella_eiec": "Shigella / EIEC cluster",
-    "serotype_oh": "O:H serotype",
-    "virulence": "Virulence gene repertoire",
 }
+
+#: Where two modules use the same scheme identifier for different things.
+#: ``cps`` is the capsular serotype of a group B streptococcus and the capsule
+#: serogroup of a meningococcus, and the two must not share a heading.
+SCHEME_TITLES_BY_MODULE: dict[tuple[str, str], str] = {
+    ("sagalactiae", "cps"): "Capsular serotype",
+    ("nmeningitidis", "cps"): "Capsule serogroup",
+    ("hinfluenzae", "mlst"): "MLST (H. influenzae scheme)",
+    ("nmeningitidis", "mlst"): "MLST and clonal complex",
+}
+
+#: The calls that answer "what is this isolate?" for each organism, with the
+#: short prefix a one-line summary uses. The order is the order a report should
+#: read them in, and the whole point is brevity: this goes in a table cell and
+#: in the title of a sheet, where there is room for one line and not for
+#: twenty, so the full set of calls stays in the Typing sheet beneath it.
+HEADLINE_SCHEMES: dict[str, tuple[tuple[str, str], ...]] = {
+    "saureus": (("spa", "spa"), ("clonal_complex", ""), ("agr", "agr")),
+    "spyogenes": (("emm", ""),),
+    "sagalactiae": (("cps", "serotype"), ("sag_alp", "Alp")),
+    "spneumoniae": (("cps_serotype", "serotype"), ("pbp_type", "PBP")),
+    "hinfluenzae": (("cap", "capsule"), ("pbp3", "PBP3")),
+    "nmeningitidis": (("cps", "serogroup"), ("finetype", "")),
+    "salmonella": (("salmonella_serovar", ""),),
+    "ecoli": (("pathotype", ""), ("phylogroup", "phylogroup")),
+}
+
+#: Which files on disk belong to each declared database, relative to
+#: ``db_dir/<KEY>/``. The modules do not share a layout -- some give each
+#: database a directory, some write files side by side, and *S. pneumoniae*
+#: puts two declared databases in one directory -- so a name is not a path and
+#: cannot be guessed. A trailing ``/`` is a directory, and a trailing ``*``
+#: picks up the BLAST index files written beside a FASTA.
+#:
+#: This is what lets a packager ship one of a module's databases and download
+#: another: the Windows build bundles the *S. aureus* marker panel and fetches
+#: the Ridom *spa* database on first launch, and it needs to know which files
+#: are which.
+DB_LAYOUT: dict[str, dict[str, tuple[str, ...]]] = {
+    "ecoli": {
+        "fimtyper": ("fimtyper/",),
+        "stxtyper": ("stxtyper/",),
+        "virulencefinder": ("virulencefinder/",),
+        "shigeifinder": ("shigeifinder/",),
+    },
+    "hinfluenzae": {
+        "cap": ("cap/",),
+        "ftsI": ("ftsI/",),
+        "bla": ("bla/",),
+        "mlst": ("mlst/",),
+    },
+    "nmeningitidis": {
+        "capsule": ("capsule/",),
+        "peptides": ("peptides/",),
+        "mlst": ("mlst/",),
+        "amr": ("amr/",),
+        "antigens": ("antigens/",),
+    },
+    "sagalactiae": {
+        "cps": ("cps.fna*", "cps.LICENSE", "cps.version"),
+        "panel": ("panel.faa*", "panel.manifest.json", "pbp2x.faa*"),
+        "surface_targets": ("surface_targets.fna*", "surface_targets.version"),
+        "alp_alleles": ("alp_alleles.fna*",),
+    },
+    "salmonella": {
+        "antigens": ("antigens/antigens.fna*", "antigens/antigens.sources.tsv"),
+        "serovars": ("antigens/serovars.csv",),
+        "spi": ("spi/",),
+        "markers": ("markers/",),
+        "mlst": ("mlst/",),
+    },
+    "saureus": {
+        "spa": ("spa/",),
+        "markers": ("markers/",),
+        "mlst": ("mlst/",),
+    },
+    "spneumoniae": {
+        "cps": ("cps/cps_loci.fna*",),
+        "cdc-serotype-probes": ("cps/sero_probes.fna*",),
+        "cdc-pbp": ("pbp/",),
+        "cdc-resistance-probes": ("res/",),
+    },
+    "spyogenes": {
+        "emm": ("emm.tfa*", "emm.version", "emm_clusters.tsv"),
+        "panel": ("panel.faa*", "panel.manifest.json"),
+    },
+}
+
+#: Provenance files a module writes beside its databases. They are small, they
+#: belong with whatever was installed, and they are what a user reads to find
+#: out where their data came from, so they travel with any subset.
+DB_PROVENANCE: dict[str, tuple[str, ...]] = {
+    "ecoli": ("provenance.tsv",),
+    "hinfluenzae": ("version.json",),
+    "nmeningitidis": ("version.json",),
+    "sagalactiae": ("cps.LICENSE",),
+    "salmonella": ("provenance.json",),
+    "saureus": ("manifest.json",),
+    "spneumoniae": ("SOURCES.tsv",),
+    "spyogenes": (),
+}
+
+#: Download caches a module keeps so a re-fetch does not re-download. They are
+#: the largest thing in two of these trees (12 MB of RefSeq protein FASTA for
+#: *S. pyogenes*) and nothing reads them at run time, so a packaged copy leaves
+#: them out.
+DB_CACHES: dict[str, tuple[str, ...]] = {
+    "sagalactiae": ("refseq/",),
+    "spyogenes": ("refseq/",),
+}
+
 
 #: CDC's emm database also holds the group C and G types of
 #: *Streptococcus dysgalactiae* subsp. *equisimilis*, named ``stG``, ``stC``,
@@ -158,10 +273,45 @@ class OrganismModule:
         """Where this module's data lives under *db_dir*."""
         return Path(db_dir) / self.key
 
-    def missing_databases(self, db_dir: Path | str) -> list[str]:
-        """The declared databases whose directory is absent under *db_dir*."""
+    def layout(self) -> dict[str, tuple[str, ...]]:
+        """This module's :data:`DB_LAYOUT` entry."""
+        return DB_LAYOUT.get(self.key, {})
+
+    def files_for(self, name: str, db_dir: Path | str) -> list[Path]:
+        """Every file on disk that belongs to the declared database *name*."""
         root = self.root(db_dir)
-        return [db.name for db in self.databases if not (root / db.name).exists()]
+        out: list[Path] = []
+        for pattern in self.layout().get(name, (f"{name}/",)):
+            if pattern.endswith("/"):
+                base = root / pattern.rstrip("/")
+                if base.is_dir():
+                    out.extend(sorted(p for p in base.rglob("*") if p.is_file()))
+            elif pattern.endswith("*"):
+                parent = (root / pattern[:-1]).parent
+                stem = Path(pattern[:-1]).name
+                if parent.is_dir():
+                    out.extend(sorted(p for p in parent.iterdir()
+                                      if p.is_file() and p.name.startswith(stem)))
+            else:
+                path = root / pattern
+                if path.is_file():
+                    out.append(path)
+        return out
+
+    def provenance_files(self, db_dir: Path | str) -> list[Path]:
+        root = self.root(db_dir)
+        return [root / name for name in DB_PROVENANCE.get(self.key, ())
+                if (root / name).is_file()]
+
+    def cache_dirs(self, db_dir: Path | str) -> list[Path]:
+        root = self.root(db_dir)
+        return [root / name.rstrip("/") for name in DB_CACHES.get(self.key, ())
+                if (root / name.rstrip("/")).exists()]
+
+    def missing_databases(self, db_dir: Path | str) -> list[str]:
+        """The declared databases with no files under *db_dir*."""
+        return [db.name for db in self.databases
+                if not self.files_for(db.name, db_dir)]
 
     def installed(self, db_dir: Path | str) -> bool:
         """True when the module has something to work with.
@@ -178,7 +328,7 @@ class OrganismModule:
             return False
         if not self.databases:
             return True
-        return any((root / db.name).exists() for db in self.databases)
+        return any(self.files_for(db.name, db_dir) for db in self.databases)
 
     # ------------------------------------------------------------- execution
     def fetch(self, db_dir: Path | str) -> None:
@@ -198,7 +348,7 @@ class OrganismModule:
         if mlst is not None and _accepts_mlst(self.module.run):
             kwargs["mlst"] = mlst
         results = self.module.run(Path(assembly), Path(db_dir), **kwargs)
-        return relabel(list(results), organism=self.title)
+        return relabel(list(results), organism=self.title, key=self.key)
 
 
 def _accepts_mlst(func) -> bool:
@@ -324,18 +474,22 @@ def select(species: SpeciesCall | None = None, mlst: MlstCall | None = None,
 
 
 # ------------------------------------------------------------------- relabel
-def relabel(results: Iterable[TypingResult], organism: str = "") -> list[TypingResult]:
+def relabel(results: Iterable[TypingResult], organism: str = "",
+            key: str = "") -> list[TypingResult]:
     """Give every result a readable heading, and correct the misleading ones.
 
     Presentation only: no call, allele or note is replaced, only added to.
     *organism* names the module the calls came from, so a report can group a
-    genome's calls by it.
+    genome's calls by it, and *key* is that module's key, which decides the
+    heading where two modules share a scheme identifier.
     """
     out: list[TypingResult] = []
     for result in results:
-        title = SCHEME_TITLES.get(result.scheme)
+        title = SCHEME_TITLES_BY_MODULE.get((key, result.scheme))
         if title is None:
-            title = result.scheme.replace("_", " ")
+            title = SCHEME_TITLES.get(result.scheme)
+        if title is None:
+            title = result.scheme.replace("__", " ").replace("_", " ")
         note = result.note
         if result.scheme == "emm" and _NON_PYOGENES_EMM.match(str(result.call or "")):
             title = "M-protein gene type (group C/G, S. dysgalactiae)"
@@ -400,3 +554,31 @@ def type_assembly(assembly: Path | str, db_dir: Path | str, *,
                         f"them read 'not determined'")
         out.extend(results)
     return out
+
+
+def headline(results: Iterable[TypingResult]) -> str:
+    """One short line naming what the organism-specific typing concluded.
+
+    The headline calls of every module that reported, in the order
+    :data:`HEADLINE_SCHEMES` gives them. A call that could not be made is kept
+    and shown as such -- "serovar not determined" is a result, and dropping it
+    would leave the line reading as though the isolate had been fully typed.
+    """
+    by_scheme: dict[str, TypingResult] = {}
+    keys: list[str] = []
+    for result in results:
+        if not result.organism:
+            continue
+        by_scheme.setdefault(result.scheme, result)
+        for key, schemes in HEADLINE_SCHEMES.items():
+            if result.scheme in {scheme for scheme, _prefix in schemes} and key not in keys:
+                keys.append(key)
+    parts: list[str] = []
+    for key in keys:
+        for scheme, prefix in HEADLINE_SCHEMES[key]:
+            found = by_scheme.get(scheme)
+            if found is None:
+                continue
+            call = str(found.call or "-")
+            parts.append(f"{prefix} {call}" if prefix else call)
+    return " \u00b7 ".join(parts)

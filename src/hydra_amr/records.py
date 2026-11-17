@@ -243,8 +243,14 @@ class TypingResult:
 
     @property
     def heading(self) -> str:
-        """What a reader should see as the name of this scheme."""
-        return self.title or self.scheme
+        """What a reader should see as the name of this scheme.
+
+        The registry sets :attr:`title` for the organism modules. The
+        species-independent lineage and cassette schemes do not go through it,
+        so their identifier is tidied up here instead: ``klebsiella__ybst``
+        reads as ``klebsiella ybst``.
+        """
+        return self.title or self.scheme.replace("__", " ").replace("_", " ")
 
     @property
     def loci(self) -> str:

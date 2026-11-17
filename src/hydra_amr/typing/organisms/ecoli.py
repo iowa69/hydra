@@ -690,12 +690,24 @@ def fetch(db_dir: Path) -> None:
     provenance.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+class _MissingDb(HydraError):
+    """One of this module's databases is absent.
+
+    Its own subclass so :func:`run` can turn it into a "not determined" call
+    for the one scheme that needed it, instead of losing every other call the
+    assembly could still have been given. A packaged build may deliberately
+    carry only part of this module's data -- ShigEiFinder's gene sets are
+    GPL-3.0 and are downloaded rather than shipped -- and the phylogroup,
+    fimH and pathotype calls must survive that.
+    """
+
+
 def _require_db(root: Path, relative: str, what: str) -> Path:
     path = root / relative
     if not path.exists():
-        raise HydraError(
+        raise _MissingDb(
             f"{KEY} typing: {what} is not installed ({path}); "
-            f"run the module's fetch() or 'hydra db download {KEY}'")
+            f"run the module's fetch() or 'hydra db download typing-{KEY}'")
     return path
 
 
@@ -1656,20 +1668,41 @@ def run(assembly: Path, db_dir: Path, *, threads: int = 1,
     if not contigs:
         raise HydraError(f"{assembly} holds no sequences")
 
+    def attempt(scheme: str, call, *args):
+        """Run one scheme; a database it needs but has not got is reported.
+
+        Returns the :class:`TypingResult`, or a "not determined" one naming the
+        missing database. Any other failure is left to propagate: that is a
+        bug, and a bug must not be dressed up as a typing result.
+        """
+        try:
+            return call(*args)
+        except _MissingDb as exc:
+            LOG.info("%s: %s", KEY, exc)
+            return TypingResult(scheme=scheme, call="not determined", lineage="-",
+                                note=str(exc))
+
     results: list[TypingResult] = []
     results.append(_phylogroup(contigs))
 
-    fimh = _fimh(assembly, root, work, threads)
+    fimh = attempt("fimH", _fimh, assembly, root, work, threads)
     results.append(fimh)
     results.append(_st131_subclone(fimh))
 
-    stx = _stx(assembly, root, work, threads)
+    stx = attempt("stx", _stx, assembly, root, work, threads)
     results.append(stx)
 
-    shigella = _shigella_eiec(assembly, root, work, threads)
-    genes = _virulence_genes(assembly, root, work, threads)
-    results.append(_pathotype(genes, stx, shigella))
-    results.append(_intimin(genes))
-    results.append(_expec_panel(genes))
+    shigella = attempt("shigella_eiec", _shigella_eiec, assembly, root, work, threads)
+    try:
+        genes = _virulence_genes(assembly, root, work, threads)
+    except _MissingDb as exc:
+        LOG.info("%s: %s", KEY, exc)
+        for scheme in ("pathotype", "intimin", "ExPEC_VF"):
+            results.append(TypingResult(scheme=scheme, call="not determined",
+                                        lineage="-", note=str(exc)))
+    else:
+        results.append(_pathotype(genes, stx, shigella))
+        results.append(_intimin(genes))
+        results.append(_expec_panel(genes))
     results.append(shigella)
     return results

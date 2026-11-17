@@ -148,13 +148,61 @@ def test_installed_needs_at_least_one_declared_database(tmp_path):
     root.mkdir(parents=True)
     assert not entry.installed(tmp_path), "an empty directory is not an install"
     (root / "markers").mkdir()
+    assert not entry.installed(tmp_path), "an empty database directory is not an install"
+    (root / "markers" / "markers.fna").write_text(">x\nACGT\n")
     assert entry.installed(tmp_path)
     assert entry.missing_databases(tmp_path) == ["spa", "mlst"]
+
+
+def test_every_declared_database_has_a_layout_entry():
+    """A name is not a path: the modules do not share a layout.
+
+    Without an entry a packager cannot tell which files belong to which
+    database, so it could not ship one and download another.
+    """
+    for key, entry in registry.modules().items():
+        layout = registry.DB_LAYOUT.get(key, {})
+        declared = [db.name for db in entry.databases]
+        assert set(layout) == set(declared), key
+        assert key in registry.DB_PROVENANCE, key
+        for name, patterns in layout.items():
+            assert patterns, f"{key}/{name} lists no files"
+            for pattern in patterns:
+                assert not pattern.startswith("/"), pattern
+                assert ".." not in pattern, pattern
+
+
+def test_files_for_finds_a_directory_a_glob_and_a_plain_file(tmp_path):
+    root = tmp_path / "spyogenes"
+    (root / "refseq").mkdir(parents=True)
+    for name in ("emm.tfa", "emm.tfa.nhr", "emm.version", "emm_clusters.tsv",
+                 "panel.faa", "panel.manifest.json"):
+        (root / name).write_text("x")
+    (root / "refseq" / "cached.faa").write_text("x")
+    entry = registry.get("spyogenes")
+    emm = {p.name for p in entry.files_for("emm", tmp_path)}
+    assert emm == {"emm.tfa", "emm.tfa.nhr", "emm.version", "emm_clusters.tsv"}
+    assert {p.name for p in entry.files_for("panel", tmp_path)} == {
+        "panel.faa", "panel.manifest.json"}
+    assert [p.name for p in entry.cache_dirs(tmp_path)] == ["refseq"]
+    assert entry.missing_databases(tmp_path) == []
+
+
+def test_two_databases_can_share_one_directory(tmp_path):
+    """S. pneumoniae puts the GPS cps loci and the CDC probes in one folder."""
+    root = tmp_path / "spneumoniae" / "cps"
+    root.mkdir(parents=True)
+    (root / "cps_loci.fna").write_text("x")
+    entry = registry.get("spneumoniae")
+    assert [p.name for p in entry.files_for("cps", tmp_path)] == ["cps_loci.fna"]
+    assert entry.files_for("cdc-serotype-probes", tmp_path) == []
+    assert "cdc-serotype-probes" in entry.missing_databases(tmp_path)
 
 
 def test_a_module_that_raises_does_not_end_the_run(tmp_path, monkeypatch):
     entry = registry.get("saureus")
     (tmp_path / "saureus" / "markers").mkdir(parents=True)
+    (tmp_path / "saureus" / "markers" / "markers.fna").write_text(">x\nACGT\n")
 
     def boom(*_args, **_kwargs):
         from hydra_amr.utils import HydraError
@@ -378,12 +426,71 @@ def test_relabel_never_changes_a_call_or_its_alleles():
     assert (after.call, after.lineage, after.alleles) == (
         before.call, before.lineage, before.alleles)
     assert after.note == "keep me"
-    assert after.heading == "Capsular serotype"
+    # No module key given, so the generic heading for the shared identifier.
+    assert after.heading == "Capsule locus"
 
 
 def test_an_unknown_scheme_still_gets_a_readable_heading():
     [out] = registry.relabel([TypingResult(scheme="some_new_scheme", call="x")])
     assert out.heading == "some new scheme"
+
+
+def test_a_scheme_two_modules_share_is_headed_by_the_module_that_made_it():
+    """``cps`` is a GBS capsular serotype and a meningococcal serogroup."""
+    [gbs] = registry.relabel([TypingResult(scheme="cps", call="III")],
+                             organism="Streptococcus agalactiae", key="sagalactiae")
+    [men] = registry.relabel([TypingResult(scheme="cps", call="B")],
+                             organism="Neisseria meningitidis", key="nmeningitidis")
+    assert gbs.heading == "Capsular serotype"
+    assert men.heading == "Capsule serogroup"
+    assert gbs.organism == "Streptococcus agalactiae"
+
+
+def test_every_scheme_a_module_reports_has_a_readable_heading():
+    """A bare identifier in a clinical report is what the owner rejected."""
+    import re as _re
+
+    root = Path(__file__).resolve().parents[1] / "src" / "hydra_amr" / "typing" / "organisms"
+    unnamed = []
+    for key in sorted(registry.modules()):
+        text = (root / f"{key}.py").read_text()
+        for scheme in sorted(set(_re.findall(r'scheme="([A-Za-z0-9_-]+)"', text))):
+            if (scheme not in registry.SCHEME_TITLES
+                    and (key, scheme) not in registry.SCHEME_TITLES_BY_MODULE):
+                unnamed.append(f"{key}/{scheme}")
+    assert not unnamed, f"no readable heading for {unnamed}"
+
+
+def test_every_headline_scheme_is_one_a_module_really_reports():
+    import re as _re
+
+    root = Path(__file__).resolve().parents[1] / "src" / "hydra_amr" / "typing" / "organisms"
+    for key, schemes in registry.HEADLINE_SCHEMES.items():
+        text = (root / f"{key}.py").read_text()
+        emitted = set(_re.findall(r'scheme="([A-Za-z0-9_]+)"', text))
+        missing = [s for s, _p in schemes if s not in emitted]
+        assert not missing, f"{key} never reports {missing}"
+
+
+def test_the_headline_names_what_the_typing_concluded():
+    calls = registry.relabel([
+        TypingResult(scheme="spa", call="t008"),
+        TypingResult(scheme="clonal_complex", call="CC8", lineage="ST8"),
+        TypingResult(scheme="agr", call="I"),
+        TypingResult(scheme="pvl", call="positive"),
+    ], organism="Staphylococcus aureus", key="saureus")
+    line = registry.headline(calls)
+    assert line == "spa t008 \u00b7 CC8 \u00b7 agr I"
+    assert len(line) < 60, "the headline goes in a table cell"
+    # A scheme that could not be called is still named, not hidden.
+    undetermined = registry.relabel([
+        TypingResult(scheme="salmonella_serovar", call="not determined")],
+        organism="Salmonella enterica", key="salmonella")
+    assert registry.headline(undetermined) == "not determined"
+
+
+def test_the_headline_ignores_the_species_independent_schemes():
+    assert registry.headline([TypingResult(scheme="ybST", call="41")]) == ""
 
 
 # --------------------------------------------------------- database wiring
@@ -433,8 +540,11 @@ def test_install_organism_records_the_licence_it_was_given(tmp_path, monkeypatch
     entry = registry.get("spyogenes")
 
     def fake_fetch(db_dir: Path) -> None:
-        for db in entry.databases:
-            (Path(db_dir) / entry.key / db.name).mkdir(parents=True, exist_ok=True)
+        root = Path(db_dir) / entry.key
+        root.mkdir(parents=True, exist_ok=True)
+        for name in ("emm.tfa", "emm.version", "emm_clusters.tsv", "panel.faa",
+                     "panel.manifest.json"):
+            (root / name).write_text("x")
 
     monkeypatch.setattr(entry.module, "fetch", fake_fetch)
     store.install_organism("typing-spyogenes")
