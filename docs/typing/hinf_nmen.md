@@ -577,7 +577,7 @@ method is quoted.
 | --- | --- | --- | --- | --- |
 | GCF_000800275.1 | M7124 | W | BioSample SAMN03020254 `serogroup=W`; BioProject PRJNA260327 "serogroup W ST-11 Hajj reference strain"; Mustapha et al. 2016 *Genome Biol Evol* 8:2065 | **W**, `W:P1.5,2:F1-1:ST-11(cc11)` |
 | GCF_001697425.1 | M07149 | W | BioSample SAMN04883361 `serogroup=W`; Retchless et al. 2016 *mSphere* 1:e00201-16, Methods: "the serogroup phenotype was confirmed using slide agglutination" | **W**, `W:P1.5,2:F1-1:ST-11(cc11)` |
-| GCF_009664695.1 | AUSMDU00010537 | W | BioSample SAMN13191640, titled "*Neisseria meningitidis* ST11 Serogroup W", `serotype=W`; Baines et al. 2020 *Microb Genom* 6:e000471 Table 1 | **W**, ST-11, cc11 |
+| GCF_009664695.1 | AUSMDU00010537 | W | BioSample SAMN13191640, titled "*Neisseria meningitidis* ST11 Serogroup W", `serotype=W`; Baines et al. 2020 *Microb Genom* 6:e000471 Table 1 | **W**, `W:P1.5,2:F1-1:ST-11(cc11)` |
 | GCF_015828725.1 | N.971/92 | X | Cassiolato et al. 2023 *Int Microbiol* 26:611, "six *N. meningitidis* serogroup X (MenX) isolates"; BioSample SAMN13841843 `Serogroup=X`; BioProject PRJNA601116 | **X (capsule gene disrupted)**, genogroup X, ST-15458 — see the note below |
 | GCF_008330885.1 | 95-134 | Y | Stenmark et al. 2020 *Sci Rep* 10:3644 Table 1, "the single molecule real-time sequenced *N. meningitidis* serogroup Y isolates (n = 8)" | **Y**, `Y:P1.5-2,10-1:F4-1:ST-23(cc23)` |
 | GCF_009664675.1 | AUSMDU00005726 | Y | BioSample SAMN13191641, titled "*Neisseria meningitidis* ST1655 Serogroup Y", `serotype=Y`; Baines et al. 2020 Table 1 | **Y**, `Y:P1.5-1,10-1:F4-1:ST-1655(cc23)` |
