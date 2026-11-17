@@ -13,11 +13,19 @@ concurrency:
 jobs:
   unit:
     name: unit tests (python ${{ matrix.python }})
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        python: ["3.9", "3.11", "3.13"]
+        python: ["3.11", "3.13"]
+        os: [ubuntu-latest]
+        include:
+          # Python 3.9 went end of life in October 2025 and ubuntu-latest
+          # (26.04) no longer carries a build of it, so setup-python fails
+          # before any test runs. pyproject still declares >=3.9, so the
+          # version is tested on the newest image that still provides it.
+          - python: "3.9"
+            os: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
