@@ -655,13 +655,17 @@ def headline(results: Iterable[TypingResult]) -> str:
     """
     by_scheme: dict[str, TypingResult] = {}
     keys: list[str] = []
+    # Which module made the call, not which modules claim the scheme name:
+    # ``cps`` belongs to both the group B streptococcus and the meningococcus,
+    # and matching by name alone put a meningococcus under both headings.
+    by_title = {entry.title: key for key, entry in modules().items()}
     for result in results:
         if not result.organism:
             continue
         by_scheme.setdefault(result.scheme, result)
-        for key, schemes in HEADLINE_SCHEMES.items():
-            if result.scheme in {scheme for scheme, _prefix in schemes} and key not in keys:
-                keys.append(key)
+        key = by_title.get(result.organism)
+        if key in HEADLINE_SCHEMES and key not in keys:
+            keys.append(key)
     parts: list[str] = []
     for key in keys:
         for scheme, prefix in HEADLINE_SCHEMES[key]:

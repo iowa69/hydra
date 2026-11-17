@@ -583,6 +583,22 @@ def test_the_headline_names_what_the_typing_concluded():
         "spa not determined \u00b7 MLST clonal complex: not determined")
 
 
+def test_a_scheme_two_modules_claim_appears_once_under_its_own_organism():
+    """``cps`` is a GBS serotype and a meningococcal serogroup.
+
+    Matching the headline by scheme name alone put a meningococcus under both
+    modules' headings: "serotype NG - serogroup NG".
+    """
+    men = registry.relabel([TypingResult(scheme="cps", call="B"),
+                            TypingResult(scheme="finetype", call="B:P1.7,16-2:F1-5")],
+                           organism="Neisseria meningitidis", key="nmeningitidis")
+    assert registry.headline(men) == "serogroup B \u00b7 B:P1.7,16-2:F1-5"
+    gbs = registry.relabel([TypingResult(scheme="cps", call="III"),
+                            TypingResult(scheme="sag_alp", call="Rib")],
+                           organism="Streptococcus agalactiae", key="sagalactiae")
+    assert registry.headline(gbs) == "serotype III \u00b7 Alp Rib"
+
+
 def test_the_headline_ignores_the_species_independent_schemes():
     assert registry.headline([TypingResult(scheme="ybST", call="41")]) == ""
 
