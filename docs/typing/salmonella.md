@@ -294,7 +294,10 @@ O:5-negative genome was available to validate that branch.
 Zenodo serves no per-member access; only 2.4 MB of it is kept (four antigen
 FASTAs and the serovar table) and the archive is deleted. cgMLST330, the Mash
 sketch and the full cgMLST allele set - 350 MB of the SISTR database - are not
-downloaded.
+downloaded, and will not be: the project owner has decided against *Salmonella*
+cgMLST ("no cgmlst that is another program"). Core-genome MLST belongs to a
+dedicated tool, and this module reports the antigenic formula with its evidence
+instead. See section 6.
 
 **Note for whoever decides what ships inside the Windows zip.** Every component
 is Apache-2.0 or unrestricted public sequence data, so all five can be
@@ -395,9 +398,9 @@ is not tested is agreement with SISTR's cgMLST refinement step.
 
 | left out | why |
 |---|---|
-| cgMLST330 and the Mash-based serovar refinement | 350 MB of database for the two steps that would push accuracy past the antigen-only ceiling. Worth adding if the Windows zip can carry it |
+| cgMLST330 and the Mash-based serovar refinement | **decided against by the project owner** ("no cgmlst that is another program"): core-genome MLST is a different tool's job, not Hydra's, so it will not be added however well the zip could carry it. The 350 MB of database was the practical objection; this is the decision. The antigen-only ceiling stands, and section 5 says where it lies |
 | An exhaustive ST/eBG -> serovar table | no machine-readable primary source could be verified. The eBG -> serovar table of Achtman 2012 is in a figure/table image, and PubMLST's isolate database would need ~21,000 requests to derive one. The eBG itself is reported; only the named cross-check is missing |
-| GenoTyphi *S.* Typhi genotyping (4.3.1/H58 etc.) | the standard for typhoid genomic surveillance, but it is a SNP scheme that needs reference mapping. Feasible from an assembly with BLAST over the SNP-flanking regions; it is the single highest-value addition for a typhoid-facing laboratory |
+| GenoTyphi *S.* Typhi genotyping (4.3.1/H58 etc.) | **not requested.** The standard for typhoid genomic surveillance, and feasible from an assembly with BLAST over the SNP-flanking regions, so it stays on this list as the single highest-value addition for a typhoid-facing laboratory -- but it has not been asked for and is not being built on spec |
 | Paratyphi B dT+ / var. Java discrimination (STM3356 SNP) | SeqSero2 does this; the exact SNP position and alleles could not be verified from a primary source in the time |
 | O:5 / var. Copenhagen call from the `oafA` 7 bp deletion | evidence is reported, the call is not: no O:5-negative genome was available to validate it |
 | pESI megaplasmid typing for *S.* Infantis | no complete pESI reference whose accession could be verified as *the* published sequence; using the validation genome's own plasmid as the reference would be circular |
