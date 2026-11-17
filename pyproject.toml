@@ -37,6 +37,19 @@ hydra = "hydra_amr.cli:main"
 Homepage = "https://github.com/iowa69/hydra"
 Documentation = "https://github.com/iowa69/hydra#readme"
 
+[tool.pytest.ini_options]
+# Without a pytest section here, pytest walks up from the test file looking for
+# a configuration file and will happily adopt the pyproject.toml of whatever
+# project a clone of Hydra happens to sit inside -- which sets that project's
+# rootdir and import path, so `import hydra_amr` resolves to a different
+# checkout, or to nothing. Declaring the section makes this file the rootdir.
+pythonpath = ["src"]
+testpaths = ["tests"]
+# src/ first, so a clone is tested against its own source and never against a
+# copy of hydra_amr installed in the environment.
+addopts = "-q --import-mode=prepend"
+filterwarnings = ["default"]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

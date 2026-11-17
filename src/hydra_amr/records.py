@@ -240,12 +240,64 @@ class TypingResult:
     loci_found: int = 0
     loci_total: int = 0
     note: str = ""
+    #: Readable heading for the scheme, set by the organism typing registry.
+    #: Presentation only; the scheme identifier stays the stable key.
+    title: str = ""
+    #: The organism typing module this call came from ("Staphylococcus aureus"),
+    #: so a report can group a genome's calls by the module that made them.
+    #: Empty for the species-independent lineage and cassette schemes.
+    organism: str = ""
 
     def as_row(self) -> dict[str, Any]:
         return {
             f"{self.scheme}": self.call,
             f"{self.scheme}_lineage": self.lineage,
         }
+
+    @property
+    def heading(self) -> str:
+        """What a reader should see as the name of this scheme.
+
+        The registry sets :attr:`title` for the organism modules. The
+        species-independent lineage and cassette schemes do not go through it,
+        so their identifier is tidied up here instead: ``klebsiella__ybst``
+        reads as ``klebsiella ybst``.
+        """
+        return self.title or self.scheme.replace("__", " ").replace("_", " ")
+
+    @property
+    def loci(self) -> str:
+        """``6/7``, or ``-`` when the module counts no loci for this scheme."""
+        return f"{self.loci_found}/{self.loci_total}" if self.loci_total else "-"
+
+    def evidence(self) -> str:
+        """The ``alleles`` mapping as one readable line.
+
+        This is where the module put the alleles, residues, identities,
+        coordinates and database versions the call rests on. Nothing is
+        abbreviated: a call a clinical microbiologist cannot check is a call
+        they cannot use.
+        """
+        return "; ".join(f"{key}={value}" for key, value in self.alleles.items())
+
+    def as_detail_row(self, sample: str = "", species: str = "") -> dict[str, Any]:
+        """One row of the long-form typing table: the call and all its evidence."""
+        row: dict[str, Any] = {}
+        if sample:
+            row["sample"] = sample
+        if species:
+            row["species"] = species
+        row.update({
+            "organism": self.organism or "-",
+            "scheme": self.scheme,
+            "scheme_name": self.heading,
+            "call": self.call,
+            "lineage": self.lineage,
+            "loci": self.loci,
+            "evidence": self.evidence(),
+            "caveats": self.note,
+        })
+        return row
 
 
 @dataclass

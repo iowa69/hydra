@@ -71,6 +71,17 @@ Hydra getting it wrong**: `KP79_ST512-1LV` matched the EnteroBase *E. coli* sche
 
 Where Hydra does not lead — genotype-to-phenotype accuracy — the table below says so.
 
+> **These figures predate two catalogue entries.** Every number in this document was
+> measured before `pmrB` (K. pneumoniae complex, colistin) and `acrR` (Escherichia,
+> multidrug) were added to `LOSS_OF_FUNCTION`. Both close a gap in Hydra's favour —
+> Kleborate reports the first and AMRFinderPlus the second, and Hydra reported neither —
+> so the "disrupted genes" rows below understate current agreement, and the colistin
+> half of the resistance score will move on genomes with a broken *pmrB*. The arms are
+> not re-run here rather than re-measured by hand: a figure in this document is one that
+> was measured, and these two entries were validated separately, on the two genomes the
+> reference tools call and on ten further public genomes where every output table was
+> byte-identical with and without them.
+
 #### 667 closed reference genomes
 
 **667 closed *K. pneumoniae* complex genomes, each a finished chromosome with its

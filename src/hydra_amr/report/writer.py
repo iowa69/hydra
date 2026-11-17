@@ -14,7 +14,7 @@ from ..utils import LOG, HydraError
 from . import html as html_report
 from .tables import (class_summary, element_table, gene_table, heteroresistance_table,
                      long_table, matrix, mlst_table, mutation_table, summary_table,
-                     typing_table)
+                     typing_overview, typing_table)
 
 #: Suffixes used for each artefact, appended to the output prefix.
 ARTEFACTS = {
@@ -24,6 +24,7 @@ ARTEFACTS = {
     "classes": ".classes",
     "mlst": ".mlst",
     "typing": ".typing",
+    "typing_overview": ".typing.overview",
     "hetero": ".heteroresistance",
     "mutations": ".mutations",
     "genes": ".genes",
@@ -87,6 +88,7 @@ def write_outputs(results: Sequence[SampleResult], *, outdir: Path | None, prefi
         "classes": class_summary(results),
         "mlst": mlst_table(results),
         "typing": typing_table(results),
+        "typing_overview": typing_overview(results),
         "hetero": heteroresistance_table(results),
         "mutations": mutation_table(results),
     }
