@@ -417,13 +417,15 @@ DATABASES: tuple[OrganismDb, ...] = (
                 "or before 31 December 2024 may continue to be downloaded, used, and "
                 "redistributed without restriction, subject only to proper scientific "
                 "citation and acknowledgement.\"",
-        redistribution="restricted",
+        redistribution="permitted",
         reference="Jolley2018",
-        notes="About 3 MB. Marked restricted and installed as a first-launch download "
-              "rather than bundled, because PubMLST expressly states terms that restrict "
-              "redistribution of part of its data; read strictly, the sentence quoted "
-              "above permits redistribution of exactly what an anonymous download can "
-              "obtain, so the conservative reading is the one applied here. "
+        notes="About 3 MB. Redistribution is permitted for the pre-2025 snapshot an "
+              "anonymous download returns, and only for that: the sentence quoted above "
+              "places exactly that data outside every restriction, subject to the citation "
+              "and the acknowledgement below. Hydra's own pubmlst database holds the same "
+              "H. influenzae scheme, and this module uses Hydra's MLST call when it has "
+              "one, so a packager that ships Hydra's copy needs only the profile table "
+              "from here and not a second copy of the allele sets. "
               "The redistribution right depends on the download being "
               "anonymous: the terms restrict post-2024 data, and the unauthenticated API "
               "serves only pre-2025 data, so the two boundaries coincide. fetch() "

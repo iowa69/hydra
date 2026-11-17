@@ -349,11 +349,9 @@ _PUBMLST_LICENCE = (
     "commercial database, knowledgebase, software system, or service\"."
 )
 _PUBMLST_NOTES = (
-    "Marked restricted and installed as a first-launch download rather than bundled, "
-    "because PubMLST expressly states terms that restrict redistribution of part of its "
-    "data. Read strictly, the sentence quoted above permits redistribution of exactly what "
-    "an anonymous download can obtain, so bundling the pre-2025 snapshot would also be "
-    "defensible; the conservative reading is the one applied here. "
+    "Redistribution is permitted for the pre-2025 snapshot an anonymous download returns, "
+    "and only for that: the sentence quoted above places exactly that data outside every "
+    "restriction, subject to citation and acknowledgement, which are given below. "
     "The redistribution right rests entirely on the download being anonymous. The "
     "unauthenticated API answers every request with the message \"Please note that you "
     "are currently restricted to accessing data that was submitted on or prior to "
@@ -377,7 +375,7 @@ DATABASES: tuple[OrganismDb, ...] = (
                f"the {len(CAPSULE_LOCI)} capsule loci NEIS0045-NEIS2743 listed in "
                f"CAPSULE_LOCI",
         version=f"anonymous snapshot retrieved {DATA_VERSION}",
-        licence=_PUBMLST_LICENCE, redistribution="restricted",
+        licence=_PUBMLST_LICENCE, redistribution="permitted",
         reference="Harrison2013",
         notes="About 2 MB. The choice of loci and the gene-name mapping follow the CDC "
               "capsule characterisation tool and the nomenclature paper. " + _PUBMLST_NOTES,
@@ -388,7 +386,7 @@ DATABASES: tuple[OrganismDb, ...] = (
                f"{', '.join(VR_LOCI + BAST_PEPTIDE_LOCI)}, the extended attributes of "
                f"fHbp_peptide and NadA_peptide, and scheme {BAST_SCHEME} (BAST) profiles",
         version=f"anonymous snapshot retrieved {DATA_VERSION}",
-        licence=_PUBMLST_LICENCE, redistribution="restricted",
+        licence=_PUBMLST_LICENCE, redistribution="permitted",
         reference="Brehony2016",
         notes="About 1.6 MB. The locus names are case-sensitive: the lower-case forms "
               "answer HTTP 404. The BAST profile table carries the two MenDeVAR columns, "
@@ -400,7 +398,7 @@ DATABASES: tuple[OrganismDb, ...] = (
         source=f"https://rest.pubmlst.org/db/{PUBMLST_DB} (loci "
                f"{', '.join(MLST_LOCI)} and scheme {MLST_SCHEME} profiles)",
         version=f"anonymous snapshot retrieved {DATA_VERSION}",
-        licence=_PUBMLST_LICENCE, redistribution="restricted",
+        licence=_PUBMLST_LICENCE, redistribution="permitted",
         reference="Jolley2018",
         notes="About 7 MB, the largest part of this module's data. The profile table "
               "carries a clonal_complex column populated for about 61% of sequence types, "
@@ -412,7 +410,7 @@ DATABASES: tuple[OrganismDb, ...] = (
         source=f"https://rest.pubmlst.org/db/{PUBMLST_DB}/loci/<locus>/alleles_fasta for "
                f"{', '.join(AMR_LOCI)}",
         version=f"anonymous snapshot retrieved {DATA_VERSION}",
-        licence=_PUBMLST_LICENCE, redistribution="restricted",
+        licence=_PUBMLST_LICENCE, redistribution="permitted",
         reference="Jolley2018",
         notes="About 1.7 MB. Allele identifiers only; no allele-to-phenotype mapping is "
               "shipped or implied. " + _PUBMLST_NOTES,

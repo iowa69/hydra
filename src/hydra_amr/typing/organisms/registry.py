@@ -237,6 +237,33 @@ DB_STAMPS: dict[str, tuple[str, ...]] = {
     "nmeningitidis": ("version.json",),
 }
 
+#: Per-module files that are a second copy of allele sets Hydra's own
+#: ``pubmlst`` database already holds, with the PubMLST scheme that holds them.
+#:
+#: Four modules want a sequence type, and four of PubMLST's schemes are already
+#: in Hydra's own install. Every one of these modules asks Hydra for its MLST
+#: call first and only types the loci itself when there is none, so when the
+#: ``pubmlst`` database is installed these allele sets are never read. They are
+#: the largest part of three of these trees, so a packager that ships
+#: ``pubmlst`` can ship one copy of the alleles instead of five.
+#:
+#: What is NOT listed here is each module's profile table: that is small, and it
+#: carries the clonal complex or the eBurst group, which Hydra's scheme-agnostic
+#: ``MlstCall`` does not. It has to travel with the module.
+#:
+#: *S. aureus* is absent on purpose -- it already ships no second copy.
+DB_SHARED_WITH_PUBMLST: dict[str, tuple[tuple[str, str], ...]] = {
+    "hinfluenzae": (("hinfluenzae", "mlst/mlst.fna*"),),
+    "nmeningitidis": (("neisseria", "mlst/mlst.fna*"),),
+    "salmonella": (("senterica_achtman_2", "mlst/mlst.fna*"),),
+}
+
+
+def shared_with_pubmlst(key: str) -> tuple[tuple[str, str], ...]:
+    """``(scheme, glob)`` pairs a packager may drop when ``pubmlst`` is shipped."""
+    return DB_SHARED_WITH_PUBMLST.get(key, ())
+
+
 #: Download caches a module keeps so a re-fetch does not re-download. They are
 #: the largest thing in two of these trees (12 MB of RefSeq protein FASTA for
 #: *S. pyogenes*) and nothing reads them at run time, so a packaged copy leaves
